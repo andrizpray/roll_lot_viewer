@@ -91,7 +91,7 @@
       {{ batchNotFound.join(', ') }}
     </div>
 
-    <div class="results-section">
+    <div class="results-section" v-if="!isLoading && (rollLots.length > 0 || batchNotFound.length > 0)">
       <div class="results-info">
         <span v-if="filterMode === 'batch'">
           Found: {{ rollLots.length }} / {{ detectedLotIds.length }} LotIDs
@@ -99,6 +99,14 @@
         <span v-else>
           Found: {{ totalItems }} items
         </span>
+        <button
+          v-if="rollLots.length > 0"
+          @click="exportData"
+          class="btn btn-sm btn-primary"
+          aria-label="Download results as CSV"
+        >
+          <i class="pi pi-download"></i> Download CSV
+        </button>
       </div>
 
       <!-- Loading Skeleton -->
@@ -459,6 +467,9 @@ const showDetail = (lot) => {
 }
 
 .results-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1rem;
   font-size: 0.875rem;
   color: #64748b;
