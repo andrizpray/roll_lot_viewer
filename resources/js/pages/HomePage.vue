@@ -275,7 +275,7 @@ const exportData = async () => {
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `roll_lots_${new Date().getTime()}.csv`);
+    link.setAttribute('download', `roll_lots_${new Date().getTime()}.xlsx`);
     document.body.appendChild(link);
     link.click();
     link.parentElement.removeChild(link);
