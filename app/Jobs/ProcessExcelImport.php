@@ -40,8 +40,6 @@ class ProcessExcelImport implements ShouldQueue
         $successCount = 0;
         $failedCount = 0;
 
-        DB::beginTransaction();
-
         try {
             // Load Excel file using Laravel Excel
             $rows = Excel::toArray([], $this->filePath)[0];
@@ -164,10 +162,7 @@ class ProcessExcelImport implements ShouldQueue
                 'status' => 'success',
             ]);
 
-            DB::commit();
-
         } catch (\Exception $e) {
-            DB::rollBack();
 
             $batch->update([
                 'status' => 'failed',
