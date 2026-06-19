@@ -83,7 +83,13 @@ class RollLotController extends Controller
             $query->where('papertype', 'like', '%' . $filters['papertype'] . '%');
         }
         if (!empty($filters['grade'])) {
-            $query->where('grade', $filters['grade']);
+            $grades = is_array($filters['grade'])
+                ? $filters['grade']
+                : explode(',', $filters['grade']);
+            $grades = array_filter(array_map('trim', $grades));
+            if (!empty($grades)) {
+                $query->whereIn('grade', $grades);
+            }
         }
         if (!empty($filters['date_from'])) {
             $query->whereDate('source_tr_date', '>=', $filters['date_from']);

@@ -55,14 +55,29 @@
           </div>
           <div class="filter-field">
             <label>Grade:</label>
-            <select v-model="filters.grade" class="input-field">
-              <option value="">All</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="WIPB">WIPB</option>
-              <option value="-">-</option>
-            </select>
+            <div class="grade-checkboxes">
+              <label class="grade-chip" :class="{ 'active': filters.grade.includes('1') }">
+                <input type="checkbox" value="1" v-model="filters.grade" />
+                1
+              </label>
+              <label class="grade-chip" :class="{ 'active': filters.grade.includes('2') }">
+                <input type="checkbox" value="2" v-model="filters.grade" />
+                2
+              </label>
+              <label class="grade-chip" :class="{ 'active': filters.grade.includes('3') }">
+                <input type="checkbox" value="3" v-model="filters.grade" />
+                3
+              </label>
+              <label class="grade-chip" :class="{ 'active': filters.grade.includes('WIPB') }">
+                <input type="checkbox" value="WIPB" v-model="filters.grade" />
+                WIPB
+              </label>
+              <label class="grade-chip" :class="{ 'active': filters.grade.includes('-') }">
+                <input type="checkbox" value="-" v-model="filters.grade" />
+                -
+              </label>
+              <button v-if="filters.grade.length > 0" @click="filters.grade = []" class="grade-clear">clear</button>
+            </div>
           </div>
           <div class="filter-field">
             <label>Gramature:</label>
@@ -192,13 +207,13 @@ const batchLotIds = ref('');
 const filters = ref({
   item_id: '',
   papertype: '',
-  grade: '',
+  grade: [],
   gramature: '',
   width: '',
   date_from: '',
   date_to: '',
+  lot_id: '',
 });
-
 const rollLots = ref([]);
 const pagination = ref(null);
 const currentPage = ref(1);
@@ -504,6 +519,59 @@ const showDetail = (lot) => {
 .grade-empty {
   background: #f1f5f9;
   color: #64748b;
+}
+
+/* Grade Filter Chips */
+.grade-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.grade-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #475569;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.grade-chip input[type="checkbox"] {
+  display: none;
+}
+
+.grade-chip:hover {
+  border-color: #1E40AF;
+  background: #f8fafc;
+}
+
+.grade-chip.active {
+  border-color: #1E40AF;
+  background: #eef2ff;
+  color: #1E40AF;
+}
+
+.grade-clear {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.25rem;
+}
+
+.grade-clear:hover {
+  color: #ef4444;
 }
 
 .pagination {
