@@ -396,15 +396,6 @@ onMounted(() => {
   color: #475569;
 }
 
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
 .progress-section {
   margin: 2rem 0;
 }

@@ -413,41 +413,6 @@ const showDetail = (lot) => {
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-primary {
-  background: #1E40AF;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #1E3A8A;
-}
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.btn-secondary:hover {
-  background: #e2e8f0;
-}
-
-.btn-sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-}
-
 .notice {
   padding: 1rem;
   border-radius: 0.5rem;
@@ -568,17 +533,6 @@ const showDetail = (lot) => {
   background: #1E40AF;
   color: white;
   border-color: #1E40AF;
-}
-
-/* Focus-visible for keyboard navigation */
-.btn:focus-visible,
-.mode-btn:focus-visible,
-.input-field:focus-visible,
-.input-textarea:focus-visible,
-.page-btn:focus-visible,
-.close-btn:focus-visible {
-  outline: 2px solid #1E40AF;
-  outline-offset: 2px;
 }
 
 /* Reduced motion */
