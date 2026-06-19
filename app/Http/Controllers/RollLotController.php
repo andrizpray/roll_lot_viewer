@@ -101,7 +101,9 @@ class RollLotController extends Controller
             $query->where('lot_id', 'like', '%' . $filters['lot_id'] . '%');
         }
 
-        $results = $query->orderBy('lot_id')->paginate($request->get('per_page', 50));
+        $perPage = (int) $request->get('per_page', 50);
+        $perPage = $perPage > 0 ? $perPage : 50;
+        $results = $query->orderBy('lot_id')->paginate($perPage);
 
         return response()->json($results);
     }
