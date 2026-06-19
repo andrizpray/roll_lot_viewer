@@ -24,21 +24,17 @@ class DescriptionParser
         // Parse from the end
         $width = end($words); // last word
         $playbond = prev($words); // second from last
-        
+
         // If playbond is "-", treat as null
         if ($playbond === '-') {
             $playbond = null;
         }
-        
+
         $gramature = prev($words); // third from last
-        
-        // Papertype = all words before gramature
-        reset($words);
-        $papertypeWords = [];
-        while (current($words) !== $gramature) {
-            $papertypeWords[] = current($words);
-            next($words);
-        }
+
+        // Papertype = everything before gramature (index-based, not value-based)
+        $totalWords = count($words);
+        $papertypeWords = array_slice($words, 0, $totalWords - 3);
         $papertype = implode(' ', $papertypeWords);
         
         // Validate that we have all required fields (papertype can't be empty)

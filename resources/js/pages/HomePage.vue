@@ -211,7 +211,7 @@ const detectedLotIds = computed(() => {
   const input = batchLotIds.value;
   if (!input.trim()) return [];
   const lotIds = input.split(/[\s,;]+/).filter(id => id.trim());
-  return [...new Set(lotIds)];
+  return [...new Set(lotIds.map(id => id.toUpperCase()))];
 });
 
 const searchBatch = async () => {
@@ -234,6 +234,7 @@ const searchBatch = async () => {
 };
 
 const searchAdvanced = async () => {
+  currentPage.value = 1;
   isLoading.value = true;
   try {
     const params = { mode: 'advanced', page: currentPage.value };

@@ -67,92 +67,92 @@ class ProcessExcelImport implements ShouldQueue
             // Create snapshot of current roll_lots before replace
             $this->createSnapshot();
 
-            // Truncate roll_lots
-            RollLot::query()->truncate();
+            // Wrap truncate and insert in transaction for atomic rollback
+            DB::transaction(function () use ($dataRows, &$successCount, &$failedCount, $parser) {
+                RollLot::query()->truncate();
+                foreach ($dataRows as $index => $row) {
+                    $rowNumber = $index + 2; // +2 because array is 0-indexed but Excel is 1-indexed + header
 
-            // Process each row
-            foreach ($dataRows as $index => $row) {
-                $rowNumber = $index + 2; // +2 because array is 0-indexed but Excel is 1-indexed + header
+                    if ($this->isEmptyRow($row)) {
+                        continue;
+                    }
 
-                if ($this->isEmptyRow($row)) {
-                    continue;
-                }
+                    $lotId = $row[0] ?? null;
+                    $itemId = $row[1] ?? null;
+                    $weight = $row[2] ?? null;
+                    $rewId = $row[3] ?? null;
+                    $trDate = $row[4] ?? null;
+                    $trTime = $row[5] ?? null;
+                    $description = $row[6] ?? null;
+                    $diameter = $row[7] ?? null;
+                    $thickness = $row[8] ?? null;
+                    $grade = $row[9] ?? null;
+                    $comments = $row[10] ?? null;
 
-                $lotId = $row[0] ?? null;
-                $itemId = $row[1] ?? null;
-                $weight = $row[2] ?? null;
-                $rewId = $row[3] ?? null;
-                $trDate = $row[4] ?? null;
-                $trTime = $row[5] ?? null;
-                $description = $row[6] ?? null;
-                $diameter = $row[7] ?? null;
-                $thickness = $row[8] ?? null;
-                $grade = $row[9] ?? null;
-                $comments = $row[10] ?? null;
+                    // Validate required fields
+                    if (empty($lotId) || empty($itemId) || empty($weight) || empty($description)) {
+                        ImportError::create([
+                            'import_batch_id' => $this->importBatchId,
+                            'row_number' => $rowNumber,
+                            'lot_id' => $lotId,
+                            'description_raw' => $description,
+                            'reason' => 'Missing required fields (LotID, ItemID, Weight, Description)',
+                        ]);
+                        $failedCount++;
+                        continue;
+                    }
 
-                // Validate required fields
-                if (empty($lotId) || empty($itemId) || empty($weight) || empty($description)) {
-                    ImportError::create([
-                        'import_batch_id' => $this->importBatchId,
-                        'row_number' => $rowNumber,
+                    // Validate weight is numeric
+                    if (!is_numeric($weight)) {
+                        ImportError::create([
+                            'import_batch_id' => $this->importBatchId,
+                            'row_number' => $rowNumber,
+                            'lot_id' => $lotId,
+                            'description_raw' => $description,
+                            'reason' => 'Weight is not a valid number: ' . $weight,
+                        ]);
+                        $failedCount++;
+                        continue;
+                    }
+
+                    // Parse description
+                    $parsed = $parser->parse($description);
+
+                    if ($parsed === null) {
+                        ImportError::create([
+                            'import_batch_id' => $this->importBatchId,
+                            'row_number' => $rowNumber,
+                            'lot_id' => $lotId,
+                            'description_raw' => $description,
+                            'reason' => 'Description cannot be parsed (less than 4 words or invalid format)',
+                        ]);
+                        $failedCount++;
+                        continue;
+                    }
+
+                    // Create roll lot
+                    RollLot::create([
                         'lot_id' => $lotId,
-                        'description_raw' => $description,
-                        'reason' => 'Missing required fields (LotID, ItemID, Weight, Description)',
-                    ]);
-                    $failedCount++;
-                    continue;
-                }
-
-                // Validate weight is numeric
-                if (!is_numeric($weight)) {
-                    ImportError::create([
+                        'item_id' => $itemId,
+                        'weight' => $weight,
+                        'papertype' => $parsed['papertype'],
+                        'gramature' => $parsed['gramature'],
+                        'playbond' => $parsed['playbond'],
+                        'width' => $parsed['width'],
+                        'rew_id' => $rewId,
+                        'grade' => $grade,
+                        'comments' => $comments,
+                        'diameter' => is_numeric($diameter) ? $diameter : null,
+                        'thickness' => $thickness,
+                        'description_raw' => $parsed['description_raw'],
+                        'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
+                        'source_tr_time' => $trTime,
                         'import_batch_id' => $this->importBatchId,
-                        'row_number' => $rowNumber,
-                        'lot_id' => $lotId,
-                        'description_raw' => $description,
-                        'reason' => 'Weight is not a valid number: ' . $weight,
                     ]);
-                    $failedCount++;
-                    continue;
+
+                    $successCount++;
                 }
-
-                // Parse description
-                $parsed = $parser->parse($description);
-
-                if ($parsed === null) {
-                    ImportError::create([
-                        'import_batch_id' => $this->importBatchId,
-                        'row_number' => $rowNumber,
-                        'lot_id' => $lotId,
-                        'description_raw' => $description,
-                        'reason' => 'Description cannot be parsed (less than 4 words or invalid format)',
-                    ]);
-                    $failedCount++;
-                    continue;
-                }
-
-                // Create roll lot
-                RollLot::create([
-                    'lot_id' => $lotId,
-                    'item_id' => $itemId,
-                    'weight' => $weight,
-                    'papertype' => $parsed['papertype'],
-                    'gramature' => $parsed['gramature'],
-                    'playbond' => $parsed['playbond'],
-                    'width' => $parsed['width'],
-                    'rew_id' => $rewId,
-                    'grade' => $grade,
-                    'comments' => $comments,
-                    'diameter' => is_numeric($diameter) ? $diameter : null,
-                    'thickness' => $thickness,
-                    'description_raw' => $parsed['description_raw'],
-                    'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
-                    'source_tr_time' => $trTime,
-                    'import_batch_id' => $this->importBatchId,
-                ]);
-
-                $successCount++;
-            }
+            });
 
             // Update batch status
             $batch->update([
@@ -161,6 +161,11 @@ class ProcessExcelImport implements ShouldQueue
                 'failed_count' => $failedCount,
                 'status' => 'success',
             ]);
+
+            // Clean up uploaded file
+            if (file_exists($this->filePath)) {
+                unlink($this->filePath);
+            }
 
         } catch (\Exception $e) {
 

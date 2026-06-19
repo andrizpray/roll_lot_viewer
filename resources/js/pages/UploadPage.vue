@@ -101,7 +101,17 @@
           <i class="pi pi-refresh"></i> Refresh
         </button>
       </div>
-      <table class="history-table">
+
+      <!-- Empty State -->
+      <div v-if="!loadingHistory && importHistory.length === 0" class="empty-state">
+        <i class="pi pi-inbox empty-icon"></i>
+        <h3>No Import History</h3>
+        <p>Upload an Excel file above to get started.</p>
+      </div>
+
+      <div v-if="loadingHistory" class="loading-text">Loading history...</div>
+
+      <table v-if="importHistory.length > 0" class="history-table">
         <thead>
           <tr>
             <th>Filename</th>
@@ -136,9 +146,10 @@
     </div>
 
     <!-- History Modal -->
-    <DetailModal
+    <ImportBatchModal
       v-if="showHistoryModal"
       :batch="currentBatch"
+      :errors="currentErrors"
       @close="showHistoryModal = false"
     />
   </div>
@@ -147,7 +158,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import DetailModal from '../components/DetailModal.vue';
+import ImportBatchModal from '../components/ImportBatchModal.vue';
 
 const fileInput = ref(null);
 const selectedFile = ref(null);
@@ -158,6 +169,8 @@ const lastBatch = ref(null);
 const importHistory = ref([]);
 const showHistoryModal = ref(false);
 const currentBatch = ref(null);
+const currentErrors = ref([]);
+const loadingHistory = ref(false);
 
 const handleDragOver = (e) => {
   e.preventDefault();
@@ -212,21 +225,18 @@ const uploadFile = async () => {
   formData.append('file', selectedFile.value);
 
   try {
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      if (uploadProgress.value < 90) {
-        uploadProgress.value += 10;
-        progressText.value = `Uploading... ${uploadProgress.value}%`;
-      }
-    }, 200);
-
     const response = await axios.post('/api/imports', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: (e) => {
+        if (e.total) {
+          uploadProgress.value = Math.round((e.loaded * 100) / e.total);
+          progressText.value = `Uploading... ${uploadProgress.value}%`;
+        }
+      },
     });
 
-    clearInterval(progressInterval);
     uploadProgress.value = 100;
     progressText.value = 'Processing in background...';
 
@@ -240,6 +250,8 @@ const uploadFile = async () => {
 };
 
 const pollStatus = async (batchId) => {
+  let retryCount = 0;
+  const maxRetries = 5;
   const checkStatus = async () => {
     try {
       const response = await axios.get(`/api/imports/${batchId}/status`);
@@ -256,10 +268,18 @@ const pollStatus = async (batchId) => {
       } else {
         // Still processing
         progressText.value = `Processing... ${data.success_count + data.failed_count}/${data.total_rows} rows processed`;
+        retryCount = 0;
         setTimeout(checkStatus, 2000);
       }
     } catch (error) {
       console.error('Status check failed:', error);
+      if (retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(checkStatus, 3000);
+      } else {
+        isUploading.value = false;
+        progressText.value = 'Status check failed after multiple retries';
+      }
     }
   };
 
@@ -267,11 +287,14 @@ const pollStatus = async (batchId) => {
 };
 
 const fetchHistory = async () => {
+  loadingHistory.value = true;
   try {
     const response = await axios.get('/api/imports');
     importHistory.value = response.data.data || [];
   } catch (error) {
     console.error('Failed to fetch history:', error);
+  } finally {
+    loadingHistory.value = false;
   }
 };
 
@@ -279,6 +302,7 @@ const showDetails = async (batch) => {
   try {
     const response = await axios.get(`/api/imports/${batch.id}`);
     currentBatch.value = response.data;
+    currentErrors.value = response.data.errors || [];
     showHistoryModal.value = true;
   } catch (error) {
     console.error('Failed to fetch batch details:', error);
@@ -399,9 +423,37 @@ onMounted(() => {
   transition: width 0.3s ease;
 }
 
-.progress-text {
-  margin-top: 0.5rem;
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.empty-state h3 {
+  font-size: 1.25rem;
+  color: #475569;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: #94a3b8;
+  margin-bottom: 1.5rem;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+}
+
+.loading-text {
+  text-align: center;
+  padding: 2rem;
   color: #64748b;
+  font-style: italic;
 }
 
 .results-section {
@@ -515,29 +567,6 @@ onMounted(() => {
 .history-table td {
   padding: 1rem;
   border-bottom: 1px solid #e5e7eb;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.status-processing {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-
-.status-success {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-failed {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .status-badge {
