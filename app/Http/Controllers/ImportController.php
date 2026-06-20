@@ -20,6 +20,9 @@ class ImportController extends Controller
      */
     public function upload(Request $request)
     {
+        // Baca file buat deteksi tipe + upload = butuh memory ekstra
+        ini_set('memory_limit', '512M');
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:20480', // max 20MB
         ]);
