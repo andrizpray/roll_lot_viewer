@@ -34,9 +34,33 @@ class SheetImport implements ToModel, WithChunkReading, WithEvents
         if ($this->columnMap === null) {
             $this->columnMap = $this->buildColumnMap($row);
 
-            // Check if this is a header row (cell at lot_id index == 'LotID')
+            // Check if this is a header row by looking for common header patterns
             $lotIdIdx = $this->columnMap['lot_id'] ?? null;
-            if ($lotIdIdx !== null && isset($row[$lotIdIdx]) && trim((string) $row[$lotIdIdx]) === 'LotID') {
+            $itemIdIdx = $this->columnMap['item_id'] ?? null;
+            $descIdx = $this->columnMap['description'] ?? null;
+            
+            $isHeader = false;
+            if ($lotIdIdx !== null && isset($row[$lotIdIdx])) {
+                $lotVal = strtolower(trim((string) $row[$lotIdIdx]));
+                if (in_array($lotVal, ['lotid', 'lot id', 'lot_id', 'lotnumber', 'no lot'])) {
+                    $isHeader = true;
+                }
+            }
+            // Also check if multiple header-like values exist
+            if (!$isHeader && $itemIdIdx !== null && isset($row[$itemIdIdx])) {
+                $itemVal = strtolower(trim((string) $row[$itemIdIdx]));
+                if (in_array($itemVal, ['itemid', 'item id', 'item_id', 'item_no', 'no item'])) {
+                    $isHeader = true;
+                }
+            }
+            if (!$isHeader && $descIdx !== null && isset($row[$descIdx])) {
+                $descVal = strtolower(trim((string) $row[$descIdx]));
+                if (in_array($descVal, ['description', 'desc', 'paper', 'jenis', 'keterangan'])) {
+                    $isHeader = true;
+                }
+            }
+
+            if ($isHeader) {
                 $this->headerSkipped = true;
                 return null;
             }
@@ -184,16 +208,64 @@ class SheetImport implements ToModel, WithChunkReading, WithEvents
             return null;
         };
 
+        // Try to find LotID column
+        $lotIdIdx = $findExact(['lotid', 'lot id', 'lot_id', 'lotnumber']);
+        
+        // If no header found, try to detect by content pattern (LotID starts with LM, LM0, etc.)
+        if ($lotIdIdx === null) {
+            foreach ($headerRow as $idx => $value) {
+                if (is_string($value) && preg_match('/^LM\d{8,}/i', trim($value))) {
+                    $lotIdIdx = $idx;
+                    break;
+                }
+            }
+        }
+        
+        // Find ItemID column - numeric values around 9-10 digits
+        $itemIdIdx = $findExact(['itemid', 'item id', 'item_id', 'item_no']);
+        if ($itemIdIdx === null) {
+            foreach ($headerRow as $idx => $value) {
+                if (is_numeric($value) && strlen((string)$value) >= 8 && strlen((string)$value) <= 12) {
+                    // Skip if this is likely weight (small decimal)
+                    if (is_float($value) && $value < 1000) continue;
+                    $itemIdIdx = $idx;
+                    break;
+                }
+            }
+        }
+
+        // Find Weight column - decimal values in typical weight range
+        $weightIdx = $findExact(['weight', 'wt', 'berat', 'weight_kg']);
+        if ($weightIdx === null) {
+            foreach ($headerRow as $idx => $value) {
+                if (is_numeric($value) && $value > 10 && $value < 10000 && strpos((string)$value, '.') !== false) {
+                    $weightIdx = $idx;
+                    break;
+                }
+            }
+        }
+
+        // Find Description column - text with paper type codes
+        $descIdx = $findExact(['description', 'desc', 'paper', 'jenis']);
+        if ($descIdx === null) {
+            foreach ($headerRow as $idx => $value) {
+                if (is_string($value) && preg_match('/BK|BM|CW|Kraft|Liner/i', $value)) {
+                    $descIdx = $idx;
+                    break;
+                }
+            }
+        }
+
         return [
-            'lot_id' => $findExact(['lotid']) ?? 1,
-            'item_id' => $findExact(['itemid']) ?? 2,
-            'qty' => $findExact(['qty']),
-            'weight' => $findExact(['weight']) ?? 4,
-            'tr_date' => $findExact(['trdate']),
-            'tr_time' => $findExact(['trtime']),
-            'qty_pack' => $findExact(['qty_pack', 'qtypack']),
-            'description' => $findExact(['description']) ?? 9,
-            'papertype' => count($headerRow) - 1,
+            'lot_id' => $lotIdIdx ?? 0,
+            'item_id' => $itemIdIdx ?? 1,
+            'qty' => $findExact(['qty', 'quantity', 'jumlah']),
+            'weight' => $weightIdx ?? 2,
+            'tr_date' => $findExact(['trdate', 'tr_date', 'date', 'tanggal']),
+            'tr_time' => $findExact(['trtime', 'tr_time', 'time', 'waktu']),
+            'qty_pack' => $findExact(['qty_pack', 'qtypack', 'pack']),
+            'description' => $descIdx ?? 3,
+            'papertype' => $findExact(['papertype', 'paper_type', 'jenis_kertas']) ?? (count($headerRow) - 1),
         ];
     }
 }
