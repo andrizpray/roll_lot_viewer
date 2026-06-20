@@ -1,38 +1,75 @@
 <template>
   <div class="upload-page">
-    <h2>Upload & Import</h2>
+    <div class="header">
+      <h2>
+        <svg class="page-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Upload & Import
+      </h2>
+    </div>
 
     <div class="upload-section">
       <div
         class="dropzone"
-        :class="{ active: isDragging }"
+        :class="{ 'dropzone-active': isDragging, 'dropzone-done': uploadProgress === 100 }"
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
       >
-        <i class="pi pi-upload dropzone-icon"></i>
-        <p>Drag & drop your Excel file here, or</p>
-        <label for="file-upload" class="btn btn-primary">Browse Files</label>
-        <input
-          id="file-upload"
-          type="file"
-          accept=".xlsx,.xls"
-          @change="handleFileSelect"
-          hidden
-        />
+        <div class="dropzone-content">
+          <svg class="dropzone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="dropzone-text">Drag & drop Excel file here</p>
+          <p class="dropzone-hint">.xlsx or .xls</p>
+          <label for="file-upload" class="btn btn-primary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Browse Files
+          </label>
+          <input
+            id="file-upload"
+            type="file"
+            accept=".xlsx,.xls"
+            @change="handleFileSelect"
+            hidden
+          />
+        </div>
       </div>
 
       <div v-if="uploadProgress > 0" class="progress-section">
-        <div class="progress-bar-wrapper">
-          <div class="progress-bar" :style="{ width: uploadProgress + '%' }"></div>
+        <div class="progress-header">
+          <span class="progress-label">
+            <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            {{ progressText }}
+          </span>
+          <span class="progress-pct">{{ uploadProgress }}%</span>
         </div>
-        <p class="progress-text">{{ progressText }}</p>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: uploadProgress + '%' }" :class="{ 'progress-done': uploadProgress === 100 }"></div>
+        </div>
       </div>
     </div>
 
     <!-- Import History -->
     <div class="history-section">
-      <h3>Import History</h3>
+      <h3>
+        <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Import History
+      </h3>
+      <div class="table-wrapper">
       <table class="history-table">
         <thead>
           <tr>
@@ -43,30 +80,31 @@
             <th>Success</th>
             <th>Failed</th>
             <th>Date</th>
-            <th>Action</th>
+            <th class="col-action">Action</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="batch in importHistory" :key="batch.id">
             <td class="filename">{{ batch.filename }}</td>
             <td>
-              <span :class="['type-badge', 'type-' + batch.type]">
+              <span :class="['type-pill', 'type-pill-' + batch.type]">
                 {{ batch.type === 'sheet' ? 'Sheet' : 'Roll' }}
               </span>
             </td>
             <td>
-              <span :class="['status-badge', 'status-' + batch.status]">{{ batch.status }}</span>
+              <span :class="['status-pill', 'pill-' + batch.status]">{{ batch.status }}</span>
             </td>
             <td>{{ batch.total_rows ?? '-' }}</td>
-            <td>{{ batch.success_count ?? '-' }}</td>
-            <td>{{ batch.failed_count ?? '-' }}</td>
-            <td>{{ batch.created_at }}</td>
-            <td>
-              <button @click="viewDetails(batch)" class="btn btn-sm btn-secondary">Details</button>
+            <td class="cell-ok">{{ batch.success_count ?? '-' }}</td>
+            <td class="cell-fail">{{ batch.failed_count ?? '-' }}</td>
+            <td class="cell-date">{{ batch.created_at }}</td>
+            <td class="col-action">
+              <button @click="viewDetails(batch)" class="btn btn-sm btn-outline">Details</button>
             </td>
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <ImportBatchModal
@@ -104,7 +142,7 @@ const uploadFile = async (file) => {
 
   try {
     uploadProgress.value = 1;
-    progressText.value = 'Uploading...';
+    progressText.value = 'Uploading to server...';
 
     const response = await axios.post('/api/imports', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -179,202 +217,209 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.upload-page {
-  padding: 2rem 0;
-}
-
-.upload-page h2 {
+/* ─── Page ─── */
+.upload-page { padding: 0; }
+.header { margin-bottom: 1.5rem; }
+.header h2 {
   font-size: 1.75rem;
+  font-weight: 700;
   color: #1e293b;
-  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
 }
+.page-icon { width: 1.75rem; height: 1.75rem; color: #059669; }
 
+/* ─── Upload Section ─── */
 .upload-section {
   background: white;
   padding: 2rem;
   border-radius: 0.75rem;
   margin-bottom: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
+/* ─── Dropzone ─── */
 .dropzone {
-  border: 2px dashed #e5e7eb;
-  border-radius: 0.75rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 1rem;
   padding: 3rem 2rem;
   text-align: center;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   cursor: pointer;
+  background: #f8fafc;
+}
+.dropzone:hover {
+  border-color: #059669;
+  background: #ecfdf5;
+}
+.dropzone-active {
+  border-color: #059669 !important;
+  background: #ecfdf5 !important;
+  transform: scale(1.02);
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.15);
+}
+.dropzone-done {
+  border-color: #16a34a;
+  background: #f0fdf4;
 }
 
-.dropzone.active {
-  border-color: #1E40AF;
-  background: #eef2ff;
+.dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
 }
-
-.dropzone-icon {
-  font-size: 3rem;
+.dropzone-svg {
+  width: 4rem;
+  height: 4rem;
   color: #94a3b8;
-  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+.dropzone-active .dropzone-svg { color: #059669; transform: translateY(-4px); }
+.dropzone-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 0;
+}
+.dropzone-hint {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0 0 0.5rem 0;
 }
 
-.dropzone p {
-  color: #64748b;
-  margin-bottom: 1.5rem;
-}
-
+/* ─── Buttons ─── */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
   border-radius: 0.5rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border: none;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
 }
-
-.btn-primary {
-  background: #1E40AF;
-  color: white;
+.btn-primary { background: #059669; color: white; }
+.btn-primary:hover { background: #047857; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3); }
+.btn-outline {
+  background: transparent;
+  color: #059669;
+  border: 1.5px solid #059669;
 }
+.btn-outline:hover { background: #ecfdf5; }
+.btn-sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+.btn-icon { width: 1.2rem; height: 1.2rem; }
+.inline-icon { width: 1rem; height: 1rem; margin-right: 0.3rem; vertical-align: middle; }
 
-.btn-primary:hover {
-  background: #1E3A8A;
-}
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.btn-secondary:hover {
-  background: #e2e8f0;
-}
-
-.btn-sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
+/* ─── Progress ─── */
 .progress-section {
   margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
 }
-
-.progress-bar-wrapper {
-  height: 0.75rem;
-  background: #e5e7eb;
-  border-radius: 0.375rem;
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.progress-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.progress-pct {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #059669;
+}
+.progress-track {
+  height: 0.625rem;
+  background: #e2e8f0;
+  border-radius: 999px;
   overflow: hidden;
 }
-
-.progress-bar {
+.progress-fill {
   height: 100%;
-  background: #1E40AF;
-  border-radius: 0.375rem;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, #059669, #10b981);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+.progress-done {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
 }
 
-.progress-text {
-  margin-top: 0.5rem;
-  color: #64748b;
-  font-size: 0.875rem;
-}
-
+/* ─── History Section ─── */
 .history-section {
   background: white;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
-
 .history-section h3 {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
+  font-weight: 600;
   color: #1e293b;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.history-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 700px;
-}
-
-.history-table thead {
-  background: #f8fafc;
-  border-bottom: 2px solid #e5e7eb;
-}
-
+.table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 0.5rem; border: 1px solid #f1f5f9; }
+.history-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 700px; }
+.history-table thead { position: sticky; top: 0; z-index: 10; }
 .history-table th {
-  padding: 1rem;
+  padding: 0.875rem 1rem;
   text-align: left;
   font-weight: 600;
   color: #475569;
-}
-
-.history-table td {
-  padding: 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.history-table tr:hover {
   background: #f8fafc;
-}
-
-.filename {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   white-space: nowrap;
 }
+.history-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+}
+.history-table tbody tr:nth-child(even) { background: #f8fafc; }
+.history-table tbody tr:hover { background: #ecfdf5; }
+.history-table tbody tr:last-child td { border-bottom: none; }
 
-.status-badge {
+.col-action { width: 80px; text-align: center; }
+.filename { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.cell-ok { color: #16a34a; font-weight: 600; }
+.cell-fail { color: #dc2626; font-weight: 600; }
+.cell-date { color: #64748b; white-space: nowrap; font-size: 0.85rem; }
+
+/* ─── Badges / Pills ─── */
+.status-pill, .type-pill {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
 }
+.pill-success { background: #dcfce7; color: #166534; }
+.pill-failed { background: #fee2e2; color: #991b1b; }
+.pill-pending, .pill-processing { background: #fef3c7; color: #92400e; }
 
-.status-processing {
-  background: #e0e7ff;
-  color: #3730a3;
-}
+.type-pill-roll { background: #e0f2fe; color: #075985; }
+.type-pill-sheet { background: #fae8ff; color: #86198f; }
 
-.status-success {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-failed {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.type-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.type-roll {
-  background: #e0f2fe;
-  color: #075985;
-}
-
-.type-sheet {
-  background: #fae8ff;
-  color: #86198f;
-}
+/* ─── Focus ─── */
+.btn:focus-visible { outline: 2px solid #059669; outline-offset: 2px; }
 </style>
