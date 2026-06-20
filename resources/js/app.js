@@ -4,6 +4,7 @@ import PrimeVue from 'primevue/config';
 
 // Import components
 import App from './App.vue';
+import DashboardPage from './pages/DashboardPage.vue';
 import HomePage from './pages/HomePage.vue';
 import SheetPage from './pages/SheetPage.vue';
 import UploadPage from './pages/UploadPage.vue';
@@ -14,6 +15,11 @@ const router = createRouter({
     routes: [
         {
             path: '/',
+            name: 'dashboard',
+            component: DashboardPage,
+        },
+        {
+            path: '/rolls',
             name: 'home',
             component: HomePage,
         },

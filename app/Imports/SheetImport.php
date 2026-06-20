@@ -19,6 +19,7 @@ class SheetImport implements ToModel, WithChunkReading
     public int $successCount = 0;
     public int $failedCount = 0;
     public int $totalRows = 0;
+    public array $processedLotIds = [];
 
     public function __construct(
         private int $importBatchId,
@@ -106,6 +107,9 @@ class SheetImport implements ToModel, WithChunkReading
 
         $this->successCount++;
 
+        // Track processed lot_ids for smart merge cleanup
+        $this->processedLotIds[] = $lotId;
+
         // Clean papertype: jika value berupa formula Excel (=...) atau
         // terlalu panjang, ganti dengan null. Extract dari gramature jika
         // masih kosong (misal "BK350" → "BK").
@@ -119,20 +123,26 @@ class SheetImport implements ToModel, WithChunkReading
             $cleanPapertype = $m[1] ?? null;
         }
 
-        return new PaperSheet([
-            'lot_id' => $lotId,
-            'item_id' => $itemId,
-            'weight' => $weight,
-            'papertype' => $cleanPapertype,
-            'gramature' => $parsed['gramature'],
-            'dimension' => $parsed['dimension'],
-            'content_pack' => is_numeric($contentPack) ? (int) $contentPack : null,
-            'content_pallet' => is_numeric($contentPallet) ? (int) $contentPallet : null,
-            'description_raw' => $parsed['description_raw'],
-            'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
-            'source_tr_time' => $trTime,
-            'import_batch_id' => $this->importBatchId,
-        ]);
+        // Upsert: update if exists, create if not
+        PaperSheet::updateOrCreate(
+            ['lot_id' => $lotId],
+            [
+                'item_id' => $itemId,
+                'weight' => $weight,
+                'papertype' => $cleanPapertype,
+                'gramature' => $parsed['gramature'],
+                'dimension' => $parsed['dimension'],
+                'content_pack' => is_numeric($contentPack) ? (int) $contentPack : null,
+                'content_pallet' => is_numeric($contentPallet) ? (int) $contentPallet : null,
+                'description_raw' => $parsed['description_raw'],
+                'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
+                'source_tr_time' => $trTime,
+                'import_batch_id' => $this->importBatchId,
+            ]
+        );
+
+        // Return null since we handle persistence via updateOrCreate above
+        return null;
     }
 
     public function chunkSize(): int

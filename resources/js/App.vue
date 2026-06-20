@@ -4,7 +4,8 @@
       <div class="container">
         <h1 class="logo">Roll Lot Viewer</h1>
         <div class="nav-links">
-          <router-link to="/" class="nav-link">Data Roll</router-link>
+          <router-link to="/" class="nav-link">Dashboard</router-link>
+          <router-link to="/rolls" class="nav-link">Data Roll</router-link>
           <router-link to="/sheets" class="nav-link">Data Sheet</router-link>
           <router-link to="/upload" class="nav-link">Upload</router-link>
         </div>

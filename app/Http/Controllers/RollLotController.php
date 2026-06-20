@@ -123,4 +123,37 @@ class RollLotController extends Controller
 
         return response()->json($rollLot);
     }
+
+    /**
+     * Return distinct values for filter dropdowns.
+     */
+    public function distinctValues()
+    {
+        $grades = RollLot::query()
+            ->whereNotNull('grade')
+            ->where('grade', '!=', '')
+            ->distinct()
+            ->orderBy('grade')
+            ->pluck('grade');
+
+        $papertypes = RollLot::query()
+            ->whereNotNull('papertype')
+            ->where('papertype', '!=', '')
+            ->distinct()
+            ->orderBy('papertype')
+            ->pluck('papertype');
+
+        $itemIds = RollLot::query()
+            ->whereNotNull('item_id')
+            ->where('item_id', '!=', '')
+            ->distinct()
+            ->orderBy('item_id')
+            ->pluck('item_id');
+
+        return response()->json([
+            'grades' => $grades->values(),
+            'papertypes' => $papertypes->values(),
+            'item_ids' => $itemIds->values(),
+        ]);
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Imports\SheetImport;
 use App\Models\ImportBatch;
 use App\Models\ImportError;
+use App\Models\PaperSheet;
 use App\Services\SheetDescriptionParser;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -31,12 +32,10 @@ class ProcessSheetImport implements ShouldQueue
     /**
      * Execute the job.
      *
-     * Catatan: berbeda dari roll lots, data sheet ini bersifat APPEND
-     * (menambah), bukan replace/truncate — karena "Mutasi Stock Sheet"
-     * adalah laporan harian dan biasanya tidak menggantikan seluruh histori.
-     * Kalau ke depannya perilakunya juga harus replace seperti roll, ganti
-     * bagian "Simpan data" di bawah ini untuk truncate dulu seperti pada
-     * ProcessExcelImport.
+     * Smart merge strategy:
+     * 1. Collect existing lot_ids before import
+     * 2. Run import with updateOrCreate (upsert per row)
+     * 3. Delete lot_ids that were present before but NOT in the new file
      */
     public function handle(): void
     {
@@ -44,8 +43,18 @@ class ProcessSheetImport implements ShouldQueue
         $parser = new SheetDescriptionParser();
 
         try {
+            // Snapshot existing lot_ids before import
+            $oldLotIds = PaperSheet::pluck('lot_id')->toArray();
+
             $sheetImport = new SheetImport($this->importBatchId, $parser);
             Excel::import($sheetImport, $this->filePath);
+
+            // Delete lot_ids that no longer appear in the new file
+            $newLotIds = $sheetImport->processedLotIds;
+            $toDelete = array_diff($oldLotIds, $newLotIds);
+            if (!empty($toDelete)) {
+                PaperSheet::whereIn('lot_id', $toDelete)->delete();
+            }
 
             $batch->update([
                 'total_rows' => $sheetImport->totalRows,

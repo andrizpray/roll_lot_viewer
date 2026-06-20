@@ -110,4 +110,45 @@ class PaperSheetController extends Controller
 
         return response()->json($sheet);
     }
+
+    /**
+     * Return distinct values for filter dropdowns.
+     */
+    public function distinctValues()
+    {
+        $papertypes = PaperSheet::query()
+            ->whereNotNull('papertype')
+            ->where('papertype', '!=', '')
+            ->distinct()
+            ->orderBy('papertype')
+            ->pluck('papertype');
+
+        $gramatures = PaperSheet::query()
+            ->whereNotNull('gramature')
+            ->where('gramature', '!=', '')
+            ->distinct()
+            ->orderBy('gramature')
+            ->pluck('gramature');
+
+        $dimensions = PaperSheet::query()
+            ->whereNotNull('dimension')
+            ->where('dimension', '!=', '')
+            ->distinct()
+            ->orderBy('dimension')
+            ->pluck('dimension');
+
+        $itemIds = PaperSheet::query()
+            ->whereNotNull('item_id')
+            ->where('item_id', '!=', '')
+            ->distinct()
+            ->orderBy('item_id')
+            ->pluck('item_id');
+
+        return response()->json([
+            'papertypes' => $papertypes->values(),
+            'gramatures' => $gramatures->values(),
+            'dimensions' => $dimensions->values(),
+            'item_ids' => $itemIds->values(),
+        ]);
+    }
 }

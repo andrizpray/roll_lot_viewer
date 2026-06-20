@@ -17,6 +17,7 @@ class RollLotImport implements ToModel, WithChunkReading
     private int $rowIndex = 0;
     public int $successCount = 0;
     public int $failedCount = 0;
+    public array $processedLotIds = [];
 
     public function __construct(
         private int $importBatchId,
@@ -99,24 +100,33 @@ class RollLotImport implements ToModel, WithChunkReading
 
         $this->successCount++;
 
-        return new RollLot([
-            'lot_id' => $lotId,
-            'item_id' => $itemId,
-            'weight' => $weight,
-            'papertype' => $parsed['papertype'],
-            'gramature' => $parsed['gramature'],
-            'playbond' => $parsed['playbond'],
-            'width' => $parsed['width'],
-            'rew_id' => $rewId,
-            'grade' => $grade,
-            'comments' => $comments,
-            'diameter' => is_numeric($diameter) ? $diameter : null,
-            'thickness' => $thickness,
-            'description_raw' => $parsed['description_raw'],
-            'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
-            'source_tr_time' => $trTime,
-            'import_batch_id' => $this->importBatchId,
-        ]);
+        // Track processed lot_ids for smart merge cleanup
+        $this->processedLotIds[] = $lotId;
+
+        // Upsert: update if exists, create if not
+        RollLot::updateOrCreate(
+            ['lot_id' => $lotId],
+            [
+                'item_id' => $itemId,
+                'weight' => $weight,
+                'papertype' => $parsed['papertype'],
+                'gramature' => $parsed['gramature'],
+                'playbond' => $parsed['playbond'],
+                'width' => $parsed['width'],
+                'rew_id' => $rewId,
+                'grade' => $grade,
+                'comments' => $comments,
+                'diameter' => is_numeric($diameter) ? $diameter : null,
+                'thickness' => $thickness,
+                'description_raw' => $parsed['description_raw'],
+                'source_tr_date' => $trDate ? \Carbon\Carbon::parse($trDate)->format('Y-m-d') : null,
+                'source_tr_time' => $trTime,
+                'import_batch_id' => $this->importBatchId,
+            ]
+        );
+
+        // Return null since we handle persistence via updateOrCreate above
+        return null;
     }
 
     public function chunkSize(): int
