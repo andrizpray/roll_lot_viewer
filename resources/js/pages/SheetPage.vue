@@ -47,19 +47,31 @@
         <div class="filter-grid">
           <div class="filter-field">
             <label>Item ID:</label>
-            <input v-model="filters.item_id" type="text" class="input-field" placeholder="ITEM001" />
+            <select v-model="filters.item_id" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.item_ids" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>Papertype:</label>
-            <input v-model="filters.papertype" type="text" class="input-field" placeholder="BK, GB, CB, BSP..." />
+            <select v-model="filters.papertype" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.papertypes" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>Gramature:</label>
-            <input v-model="filters.gramature" type="text" class="input-field" placeholder="BK350" />
+            <select v-model="filters.gramature" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.gramatures" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>Dimension:</label>
-            <input v-model="filters.dimension" type="text" class="input-field" placeholder="590X840" />
+            <select v-model="filters.dimension" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.dimensions" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>From Date:</label>
@@ -169,7 +181,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import SheetDetailModal from '../components/SheetDetailModal.vue';
 
@@ -182,6 +194,14 @@ const filters = ref({
   dimension: '',
   date_from: '',
   date_to: '',
+});
+
+// Distinct values for dropdown options
+const distinctValues = ref({
+  papertypes: [],
+  gramatures: [],
+  dimensions: [],
+  item_ids: [],
 });
 
 const sheets = ref([]);
@@ -198,6 +218,15 @@ const detectedLotIds = computed(() => {
   const lotIds = input.split(/[\s,;]+/).filter(id => id.trim());
   return [...new Set(lotIds.map(id => id.toUpperCase()))];
 });
+
+const fetchDistinctValues = async () => {
+  try {
+    const response = await axios.get('/api/sheets/distinct-values');
+    distinctValues.value = response.data;
+  } catch (error) {
+    console.error('Failed to fetch distinct values:', error);
+  }
+};
 
 const searchBatch = async () => {
   isLoading.value = true;
@@ -272,6 +301,11 @@ const exportData = async () => {
 const showDetail = (sheet) => {
   selectedSheet.value = sheet;
 };
+
+onMounted(() => {
+  fetchDistinctValues();
+  searchAdvanced();
+});
 </script>
 
 <style scoped>
@@ -385,6 +419,8 @@ const showDetail = (sheet) => {
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
   font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-field:focus {

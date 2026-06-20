@@ -47,30 +47,56 @@
         <div class="filter-grid">
           <div class="filter-field">
             <label>Item ID:</label>
-            <input v-model="filters.item_id" type="text" class="input-field" placeholder="4321*" />
-          </div>
-          <div class="filter-field">
-            <label>Grade:</label>
-            <select v-model="filters.grade" class="input-field">
+            <select v-model="filters.item_id" class="input-field">
               <option value="">All</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="WIPB">WIPB</option>
-              <option value="-">-</option>
+              <option v-for="val in distinctValues.item_ids" :key="val" :value="val">{{ val }}</option>
             </select>
           </div>
           <div class="filter-field">
+            <label>Grade:</label>
+            <div class="searchable-select">
+              <input
+                type="text"
+                class="input-field"
+                v-model="gradeSearch"
+                placeholder="Search grade..."
+                @focus="gradeDropdownOpen = true"
+                @input="gradeDropdownOpen = true"
+                @blur="handleGradeBlur"
+                autocomplete="off"
+              />
+              <ul v-if="gradeDropdownOpen && filteredGradeOptions.length > 0" class="dropdown-list">
+                <li
+                  v-for="option in filteredGradeOptions"
+                  :key="option.value"
+                  @mousedown.prevent="selectGrade(option)"
+                  :class="{ active: filters.grade === option.value }"
+                >
+                  {{ option.label }}
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="filter-field">
             <label>Papertype:</label>
-            <input v-model="filters.papertype" type="text" class="input-field" placeholder="BK, BW, GW, A... " />
+            <select v-model="filters.papertype" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.papertypes" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>Gramature:</label>
-            <input v-model="filters.gramature" type="text" class="input-field" placeholder="e.g. 105*" />
+            <select v-model="filters.gramature" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.gramatures" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>Width:</label>
-            <input v-model="filters.width" type="text" class="input-field" placeholder="e.g. 1300*" />
+            <select v-model="filters.width" class="input-field">
+              <option value="">All</option>
+              <option v-for="val in distinctValues.dimensions" :key="val" :value="val">{{ val }}</option>
+            </select>
           </div>
           <div class="filter-field">
             <label>From Date:</label>
@@ -186,7 +212,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import DetailModal from '../components/DetailModal.vue';
 
@@ -203,6 +229,44 @@ const filters = ref({
   lot_id: '',
 });
 
+// Distinct values for dropdown options
+const distinctValues = ref({
+  papertypes: [],
+  gramatures: [],
+  dimensions: [],
+  item_ids: [],
+});
+
+// Grade searchable select state
+const GRADE_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: 'WIPB', label: 'WIPB' },
+  { value: '-', label: '-' },
+];
+const gradeSearch = ref('');
+const gradeDropdownOpen = ref(false);
+
+const filteredGradeOptions = computed(() => {
+  const search = gradeSearch.value.toLowerCase();
+  if (!search) return GRADE_OPTIONS;
+  return GRADE_OPTIONS.filter(opt => opt.label.toLowerCase().includes(search));
+});
+
+const selectGrade = (option) => {
+  filters.value.grade = option.value;
+  gradeSearch.value = option.value === '' ? '' : option.label;
+  gradeDropdownOpen.value = false;
+};
+
+const handleGradeBlur = () => {
+  setTimeout(() => {
+    gradeDropdownOpen.value = false;
+  }, 150);
+};
+
 const rollLots = ref([]);
 const pagination = ref(null);
 const currentPage = ref(1);
@@ -217,6 +281,15 @@ const detectedLotIds = computed(() => {
   const lotIds = input.split(/[\s,;]+/).filter(id => id.trim());
   return [...new Set(lotIds.map(id => id.toUpperCase()))];
 });
+
+const fetchDistinctValues = async () => {
+  try {
+    const response = await axios.get('/api/roll-lots/distinct-values');
+    distinctValues.value = response.data;
+  } catch (error) {
+    console.error('Failed to fetch distinct values:', error);
+  }
+};
 
 const searchBatch = async () => {
   isLoading.value = true;
@@ -293,6 +366,7 @@ const showDetail = (lot) => {
 };
 
 onMounted(() => {
+  fetchDistinctValues();
   searchAdvanced();
 });
 </script>
@@ -408,12 +482,54 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
   font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-field:focus {
   outline: none;
   border-color: #1E40AF;
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+/* Searchable select */
+.searchable-select {
+  position: relative;
+}
+
+.searchable-select .input-field {
+  width: 100%;
+}
+
+.dropdown-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.dropdown-list li {
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #334155;
+  transition: background 0.15s;
+}
+
+.dropdown-list li:hover,
+.dropdown-list li.active {
+  background: #eff6ff;
+  color: #1E40AF;
 }
 
 .btn {
