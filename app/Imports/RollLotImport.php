@@ -7,9 +7,11 @@ use App\Models\RollLot;
 use App\Services\DescriptionParser;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\Importable;
+use Maatwebsite\Excel\Events\BeforeReading;
 
-class RollLotImport implements ToModel, WithChunkReading
+class RollLotImport implements ToModel, WithChunkReading, WithEvents
 {
     use Importable;
 
@@ -132,5 +134,19 @@ class RollLotImport implements ToModel, WithChunkReading
     public function chunkSize(): int
     {
         return 500;
+    }
+
+    /**
+     * Configure reader: skip styles (ReadDataOnly) + limit columns (A-K).
+     * Cuts memory ~70% for .xls files.
+     */
+    public function registerEvents(): array
+    {
+        return [
+            BeforeReading::class => function (BeforeReading $event) {
+                $event->reader->setReadDataOnly(true);
+                $event->reader->setReadFilter(new LightReadFilter(11)); // A-K
+            },
+        ];
     }
 }

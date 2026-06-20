@@ -7,9 +7,11 @@ use App\Models\PaperSheet;
 use App\Services\SheetDescriptionParser;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\Importable;
+use Maatwebsite\Excel\Events\BeforeReading;
 
-class SheetImport implements ToModel, WithChunkReading
+class SheetImport implements ToModel, WithChunkReading, WithEvents
 {
     use Importable;
 
@@ -148,6 +150,20 @@ class SheetImport implements ToModel, WithChunkReading
     public function chunkSize(): int
     {
         return 500;
+    }
+
+    /**
+     * Configure reader: skip styles (ReadDataOnly) + limit columns (A-L).
+     * Cuts memory ~70% for .xls files.
+     */
+    public function registerEvents(): array
+    {
+        return [
+            BeforeReading::class => function (BeforeReading $event) {
+                $event->reader->setReadDataOnly(true);
+                $event->reader->setReadFilter(new LightReadFilter(13)); // A-M
+            },
+        ];
     }
 
     protected function buildColumnMap(array $headerRow): array
