@@ -106,11 +106,24 @@ class SheetImport implements ToModel, WithChunkReading
 
         $this->successCount++;
 
+        // Clean papertype: jika value berupa formula Excel (=...) atau
+        // terlalu panjang, ganti dengan null. Extract dari gramature jika
+        // masih kosong (misal "BK350" → "BK").
+        $cleanPapertype = is_string($papertype) ? trim($papertype) : null;
+        if ($cleanPapertype !== null && (str_starts_with($cleanPapertype, '=') || strlen($cleanPapertype) > 50)) {
+            $cleanPapertype = null;
+        }
+        if ($cleanPapertype === null && !empty($parsed['gramature'])) {
+            // Extract papertype prefix dari gramature (BK350 → BK)
+            preg_match('/^([A-Za-z]+)/', $parsed['gramature'], $m);
+            $cleanPapertype = $m[1] ?? null;
+        }
+
         return new PaperSheet([
             'lot_id' => $lotId,
             'item_id' => $itemId,
             'weight' => $weight,
-            'papertype' => is_string($papertype) ? trim($papertype) : $papertype,
+            'papertype' => $cleanPapertype,
             'gramature' => $parsed['gramature'],
             'dimension' => $parsed['dimension'],
             'content_pack' => is_numeric($contentPack) ? (int) $contentPack : null,

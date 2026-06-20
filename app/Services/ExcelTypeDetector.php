@@ -35,7 +35,8 @@ class ExcelTypeDetector
         }
 
         $hasSheetMarkers = in_array('qty_pack', $normalized, true)
-            && in_array('description', $normalized, true);
+            && (in_array('description', $normalized, true)
+                || in_array('keterangan', $normalized, true));
 
         if ($hasSheetMarkers) {
             return self::TYPE_SHEET;
