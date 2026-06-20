@@ -64,12 +64,17 @@ class ProcessExcelImport implements ShouldQueue
 
             $totalRows = count($dataRows);
 
-            // Create snapshot of current roll_lots before replace
-            $this->createSnapshot();
+            // Snapshot + truncate + insert dibungkus 1 transaction: kalau ada
+            // error di tengah proses, semua di-rollback dan data lama TIDAK
+            // hilang (sebelumnya truncate dieksekusi di luar transaction).
+            DB::transaction(function () use ($dataRows, $parser, &$successCount, &$failedCount) {
+                // Create snapshot of current roll_lots before replace
+                $this->createSnapshot();
 
-            // Wrap truncate and insert in transaction for atomic rollback
-            DB::transaction(function () use ($dataRows, &$successCount, &$failedCount, $parser) {
+                // Truncate roll_lots
                 RollLot::query()->truncate();
+
+                // Process each row
                 foreach ($dataRows as $index => $row) {
                     $rowNumber = $index + 2; // +2 because array is 0-indexed but Excel is 1-indexed + header
 
@@ -162,12 +167,7 @@ class ProcessExcelImport implements ShouldQueue
                 'status' => 'success',
             ]);
 
-            // Clean up uploaded file
-            if (file_exists($this->filePath)) {
-                unlink($this->filePath);
-            }
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
 
             $batch->update([
                 'status' => 'failed',
@@ -176,7 +176,7 @@ class ProcessExcelImport implements ShouldQueue
             ImportError::create([
                 'import_batch_id' => $this->importBatchId,
                 'row_number' => 0,
-                'description_raw' => $e->getMessage(),
+                'description_raw' => null,
                 'reason' => 'Import failed: ' . $e->getMessage(),
             ]);
 

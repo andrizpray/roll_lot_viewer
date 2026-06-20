@@ -9,10 +9,11 @@ class ImportBatch extends Model
 {
     protected $fillable = [
         'filename',
+        'type',
+        'status',
         'total_rows',
         'success_count',
         'failed_count',
-        'status',
     ];
 
     protected $casts = [
@@ -34,5 +35,10 @@ class ImportBatch extends Model
     public function rollLotHistories(): HasMany
     {
         return $this->hasMany(RollLotHistory::class);
+    }
+
+    public function paperSheets(): HasMany
+    {
+        return $this->hasMany(PaperSheet::class);
     }
 }

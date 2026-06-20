@@ -1,7 +1,7 @@
 <template>
   <div class="home-page">
     <div class="header">
-      <h2>Roll Lot Data</h2>
+      <h2>Paper Sheet Data</h2>
       <button @click="exportData" class="btn btn-primary" aria-label="Export results as CSV">
         <i class="pi pi-download"></i> Export CSV
       </button>
@@ -14,7 +14,7 @@
           @click="filterMode = 'batch'"
           :class="['mode-btn', { active: filterMode === 'batch' }]"
         >
-          Batch LotID Search
+          Batch Search
         </button>
         <button
           @click="filterMode = 'advanced'"
@@ -30,7 +30,7 @@
         <textarea
           id="batch-lotids"
           v-model="batchLotIds"
-          placeholder="E312345, E312346&#10;E312347"
+          placeholder="SHT001, SHT002&#10;SHT003"
           rows="5"
           class="input-textarea"
         ></textarea>
@@ -47,30 +47,19 @@
         <div class="filter-grid">
           <div class="filter-field">
             <label>Item ID:</label>
-            <input v-model="filters.item_id" type="text" class="input-field" placeholder="4321*" />
-          </div>
-          <div class="filter-field">
-            <label>Grade:</label>
-            <select v-model="filters.grade" class="input-field">
-              <option value="">All</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="WIPB">WIPB</option>
-              <option value="-">-</option>
-            </select>
+            <input v-model="filters.item_id" type="text" class="input-field" placeholder="ITEM001" />
           </div>
           <div class="filter-field">
             <label>Papertype:</label>
-            <input v-model="filters.papertype" type="text" class="input-field" placeholder="BK, BW, GW, A... " />
+            <input v-model="filters.papertype" type="text" class="input-field" placeholder="BK, GB, CB, BSP..." />
           </div>
           <div class="filter-field">
             <label>Gramature:</label>
-            <input v-model="filters.gramature" type="text" class="input-field" placeholder="e.g. 105*" />
+            <input v-model="filters.gramature" type="text" class="input-field" placeholder="BK350" />
           </div>
           <div class="filter-field">
-            <label>Width:</label>
-            <input v-model="filters.width" type="text" class="input-field" placeholder="e.g. 1300*" />
+            <label>Dimension:</label>
+            <input v-model="filters.dimension" type="text" class="input-field" placeholder="590X840" />
           </div>
           <div class="filter-field">
             <label>From Date:</label>
@@ -79,10 +68,6 @@
           <div class="filter-field">
             <label>To Date:</label>
             <input v-model="filters.date_to" type="date" class="input-field" />
-          </div>
-          <div class="filter-field">
-            <label>Lot ID:</label>
-            <input v-model="filters.lot_id" type="text" class="input-field" placeholder="Search By LotID" />
           </div>
         </div>
         <button @click="currentPage = 1; searchAdvanced()" class="btn btn-primary">Search</button>
@@ -95,16 +80,16 @@
       {{ batchNotFound.join(', ') }}
     </div>
 
-    <div class="results-section" v-if="!isLoading && (rollLots.length > 0 || batchNotFound.length > 0)">
+    <div class="results-section" v-if="!isLoading && (sheets.length > 0 || batchNotFound.length > 0)">
       <div class="results-info">
         <span v-if="filterMode === 'batch'">
-          Found: {{ rollLots.length }} / {{ detectedLotIds.length }} LotIDs
+          Found: {{ sheets.length }} / {{ detectedLotIds.length }} LotIDs
         </span>
         <span v-else>
           Found: {{ totalItems }} items
         </span>
         <button
-          v-if="rollLots.length > 0"
+          v-if="sheets.length > 0"
           @click="exportData"
           class="btn btn-sm btn-primary"
           aria-label="Download results as CSV"
@@ -116,41 +101,47 @@
       <!-- Loading Skeleton -->
       <div v-if="isLoading" class="skeleton-table">
         <div v-for="n in 8" :key="'skel-'+n" class="skeleton-row">
-          <div class="skeleton-cell" v-for="m in 10" :key="'skel-c-'+m">
+          <div class="skeleton-cell" v-for="m in 8" :key="'skel-c-'+m">
             <div class="skeleton-bar shimmer"></div>
           </div>
         </div>
       </div>
 
-      <div class="table-wrapper" v-if="!isLoading && rollLots.length > 0">
+      <!-- Empty State -->
+      <div v-if="!isLoading && sheets.length === 0 && !batchNotFound.length" class="empty-state">
+        <i class="pi pi-inbox empty-icon"></i>
+        <h3>No Data Found</h3>
+        <p>Upload a Mutasi Stock Sheet file first or adjust your filter criteria.</p>
+        <router-link to="/upload" class="btn btn-primary">Go to Upload</router-link>
+      </div>
+
+      <div class="table-wrapper" v-if="!isLoading && sheets.length > 0">
       <table class="data-table">
         <thead>
           <tr>
             <th>LotID</th>
             <th>ItemID</th>
             <th>Weight</th>
-            <th>RewID</th>
             <th>Papertype</th>
             <th>Gramature</th>
-            <th>Width</th>
-            <th>Grade</th>
-            <th>Diameter</th>
+            <th>Dimension</th>
+            <th>Content Pack</th>
+            <th>Content Pallet</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="lot in rollLots" :key="lot.id" class="row-hover">
-            <td>{{ lot.lot_id }}</td>
-            <td>{{ lot.item_id }}</td>
-            <td>{{ lot.weight }}</td>
-            <td>{{ lot.rew_id || '-' }}</td>
-            <td>{{ lot.papertype }}</td>
-            <td>{{ lot.gramature }}</td>
-            <td>{{ lot.width }}</td>
-            <td>{{ lot.grade || '-' }}</td>
-            <td>{{ lot.diameter ? lot.diameter + 'mm' : '-' }}</td>
+          <tr v-for="sheet in sheets" :key="sheet.id" class="row-hover">
+            <td>{{ sheet.lot_id }}</td>
+            <td>{{ sheet.item_id }}</td>
+            <td>{{ sheet.weight }}</td>
+            <td>{{ sheet.papertype || '-' }}</td>
+            <td>{{ sheet.gramature }}</td>
+            <td>{{ sheet.dimension }}</td>
+            <td>{{ sheet.content_pack ?? '-' }}</td>
+            <td>{{ sheet.content_pallet ?? '-' }}</td>
             <td>
-              <button @click="showDetail(lot)" class="btn btn-sm btn-secondary" aria-label="View details">
+              <button @click="showDetail(sheet)" class="btn btn-sm btn-secondary" aria-label="View details">
                 <i class="pi pi-eye"></i>
               </button>
             </td>
@@ -172,41 +163,31 @@
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div v-if="!isLoading && rollLots.length === 0 && !batchNotFound.length" class="empty-state">
-      <i class="pi pi-inbox empty-icon"></i>
-      <h3>No Data Found</h3>
-      <p>Upload a Mutasi Roll file first or adjust your filter criteria.</p>
-      <router-link to="/upload" class="btn btn-primary">Go to Upload</router-link>
-    </div>
-
     <!-- Detail Modal -->
-    <DetailModal v-if="selectedLot" :lot="selectedLot" @close="selectedLot = null" />
+    <SheetDetailModal v-if="selectedSheet" :sheet="selectedSheet" @close="selectedSheet = null" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed } from 'vue';
 import axios from 'axios';
-import DetailModal from '../components/DetailModal.vue';
+import SheetDetailModal from '../components/SheetDetailModal.vue';
 
 const filterMode = ref('advanced');
 const batchLotIds = ref('');
 const filters = ref({
   item_id: '',
-  grade: '',
   papertype: '',
   gramature: '',
-  width: '',
+  dimension: '',
   date_from: '',
   date_to: '',
-  lot_id: '',
 });
 
-const rollLots = ref([]);
+const sheets = ref([]);
 const pagination = ref(null);
 const currentPage = ref(1);
-const selectedLot = ref(null);
+const selectedSheet = ref(null);
 const batchNotFound = ref([]);
 const totalItems = ref(0);
 const isLoading = ref(false);
@@ -222,13 +203,13 @@ const searchBatch = async () => {
   isLoading.value = true;
   const lotIdsParam = detectedLotIds.value.join(',');
   try {
-    const response = await axios.get('/api/roll-lots', {
+    const response = await axios.get('/api/sheets', {
       params: {
         mode: 'batch',
         lot_ids: lotIdsParam,
       },
     });
-    rollLots.value = response.data.data;
+    sheets.value = response.data.data;
     batchNotFound.value = response.data.meta.not_found || [];
   } catch (error) {
     console.error('Batch search failed:', error);
@@ -246,8 +227,8 @@ const searchAdvanced = async () => {
         params[key] = filters.value[key];
       }
     });
-    const response = await axios.get('/api/roll-lots', { params });
-    rollLots.value = response.data.data;
+    const response = await axios.get('/api/sheets', { params });
+    sheets.value = response.data.data;
     pagination.value = {
       last_page: response.data.last_page,
       current_page: response.data.current_page,
@@ -262,7 +243,7 @@ const searchAdvanced = async () => {
 
 const exportData = async () => {
   try {
-    const params = { resource: 'roll', mode: filterMode.value };
+    const params = { resource: 'sheet', mode: filterMode.value };
     if (filterMode.value === 'batch') {
       params.lot_ids = detectedLotIds.value.join(',');
     } else {
@@ -279,7 +260,7 @@ const exportData = async () => {
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `roll_lots_${new Date().getTime()}.xlsx`);
+    link.setAttribute('download', `paper_sheets_${new Date().getTime()}.xlsx`);
     document.body.appendChild(link);
     link.click();
     link.parentElement.removeChild(link);
@@ -288,13 +269,9 @@ const exportData = async () => {
   }
 };
 
-const showDetail = (lot) => {
-  selectedLot.value = lot;
+const showDetail = (sheet) => {
+  selectedSheet.value = sheet;
 };
-
-onMounted(() => {
-  searchAdvanced();
-});
 </script>
 
 <style scoped>
@@ -479,42 +456,10 @@ onMounted(() => {
   color: #64748b;
 }
 
-/* Skeleton Loading */
-.skeleton-table {
-  overflow: hidden;
-}
-
-.skeleton-row {
-  display: flex;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.skeleton-cell {
-  flex: 1;
-  padding: 1rem 0.5rem;
-}
-
-.skeleton-bar {
-  height: 1rem;
-  border-radius: 0.25rem;
-  background: #e2e8f0;
-}
-
-.shimmer {
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1000px;
+  min-width: 800px;
 }
 
 .table-wrapper {
@@ -557,9 +502,13 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 0.375rem;
   background: white;
-  color: #475569;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.page-btn:hover {
+  border-color: #1E40AF;
+  color: #1E40AF;
 }
 
 .page-btn.active {
@@ -568,18 +517,65 @@ onMounted(() => {
   border-color: #1E40AF;
 }
 
-.page-btn:hover:not(.active) {
-  background: #f8fafc;
-  border-color: #1E40AF;
+.btn:focus-visible,
+.mode-btn:focus-visible,
+.input-field:focus-visible,
+.input-textarea:focus-visible,
+.page-btn:focus-visible {
+  outline: 2px solid #1E40AF;
+  outline-offset: 2px;
 }
 
-/* Empty State */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.skeleton-table {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.skeleton-bar {
+  height: 1rem;
+  border-radius: 0.25rem;
+  background: #e5e7eb;
+}
+
+.shimmer {
+  animation: shimmer 1.5s infinite;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f1f5f9 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
   background: white;
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
 }
 
 .empty-state h3 {
@@ -591,22 +587,5 @@ onMounted(() => {
 .empty-state p {
   color: #94a3b8;
   margin-bottom: 1.5rem;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  color: #cbd5e1;
-  margin-bottom: 1rem;
-}
-
-/* Focus-visible for keyboard navigation */
-.btn:focus-visible,
-.mode-btn:focus-visible,
-.input-field:focus-visible,
-.input-textarea:focus-visible,
-.page-btn:focus-visible,
-.close-btn:focus-visible {
-  outline: 2px solid #1E40AF;
-  outline-offset: 2px;
 }
 </style>

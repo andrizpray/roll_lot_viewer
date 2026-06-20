@@ -5,6 +5,7 @@ import PrimeVue from 'primevue/config';
 // Import components
 import App from './App.vue';
 import HomePage from './pages/HomePage.vue';
+import SheetPage from './pages/SheetPage.vue';
 import UploadPage from './pages/UploadPage.vue';
 
 // Router setup
@@ -15,6 +16,11 @@ const router = createRouter({
             path: '/',
             name: 'home',
             component: HomePage,
+        },
+        {
+            path: '/sheets',
+            name: 'sheets',
+            component: SheetPage,
         },
         {
             path: '/upload',

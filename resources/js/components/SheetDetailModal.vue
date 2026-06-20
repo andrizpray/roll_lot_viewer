@@ -2,7 +2,7 @@
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Lot Detail</h3>
+        <h3>Sheet Detail</h3>
         <button @click="$emit('close')" class="close-btn" aria-label="Close detail modal">
           <i class="pi pi-times"></i>
         </button>
@@ -11,55 +11,47 @@
         <div class="detail-grid">
           <div class="detail-item">
             <label>Lot ID:</label>
-            <span>{{ lot.lot_id }}</span>
+            <span>{{ sheet.lot_id }}</span>
           </div>
           <div class="detail-item">
             <label>Item ID:</label>
-            <span>{{ lot.item_id }}</span>
+            <span>{{ sheet.item_id }}</span>
           </div>
           <div class="detail-item">
             <label>Weight:</label>
-            <span>{{ lot.weight }}</span>
+            <span>{{ sheet.weight }}</span>
           </div>
           <div class="detail-item">
-            <label>Rew ID:</label>
-            <span>{{ lot.rew_id || '-' }}</span>
-          </div>
-          <div class="detail-item">
-            <label>Paper Type:</label>
-            <span>{{ lot.papertype }}</span>
+            <label>Papertype:</label>
+            <span>{{ sheet.papertype || '-' }}</span>
           </div>
           <div class="detail-item">
             <label>Gramature:</label>
-            <span>{{ lot.gramature }}</span>
+            <span>{{ sheet.gramature }}</span>
           </div>
           <div class="detail-item">
-            <label>Play Bond:</label>
-            <span>{{ lot.playbond }}</span>
+            <label>Dimension:</label>
+            <span>{{ sheet.dimension }}</span>
           </div>
           <div class="detail-item">
-            <label>Width:</label>
-            <span>{{ lot.width }}</span>
+            <label>Content Pack:</label>
+            <span>{{ sheet.content_pack ?? '-' }}</span>
           </div>
           <div class="detail-item">
-            <label>Grade:</label>
-            <span>{{ lot.grade || '-' }}</span>
-          </div>
-          <div class="detail-item">
-            <label>Comments:</label>
-            <span>{{ lot.comments || '-' }}</span>
+            <label>Content Pallet:</label>
+            <span>{{ sheet.content_pallet ?? '-' }}</span>
           </div>
           <div class="detail-item">
             <label>Transaction Date:</label>
-            <span>{{ lot.source_tr_date || '-' }}</span>
+            <span>{{ sheet.source_tr_date || '-' }}</span>
           </div>
           <div class="detail-item">
             <label>Transaction Time:</label>
-            <span>{{ lot.source_tr_time || '-' }}</span>
+            <span>{{ sheet.source_tr_time || '-' }}</span>
           </div>
           <div class="detail-item full-width">
             <label>Description:</label>
-            <span>{{ lot.description_raw || '-' }}</span>
+            <span>{{ sheet.description_raw || '-' }}</span>
           </div>
         </div>
       </div>
@@ -71,7 +63,7 @@
 import { onMounted, onUnmounted } from 'vue';
 
 defineProps({
-  lot: {
+  sheet: {
     type: Object,
     required: true,
   },

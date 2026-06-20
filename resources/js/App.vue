@@ -4,7 +4,8 @@
       <div class="container">
         <h1 class="logo">Roll Lot Viewer</h1>
         <div class="nav-links">
-          <router-link to="/" class="nav-link">Data</router-link>
+          <router-link to="/" class="nav-link">Data Roll</router-link>
+          <router-link to="/sheets" class="nav-link">Data Sheet</router-link>
           <router-link to="/upload" class="nav-link">Upload</router-link>
         </div>
       </div>
@@ -79,60 +80,5 @@ body {
   max-width: 1400px;
   margin: 2rem auto;
   padding: 0 2rem;
-}
-
-/* Global Button Styles */
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-primary {
-  background: #1E40AF;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #1E3A8A;
-}
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.btn-secondary:hover {
-  background: #e2e8f0;
-}
-
-.btn-sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn:focus-visible {
-  outline: 2px solid #1E40AF;
-  outline-offset: 2px;
 }
 </style>

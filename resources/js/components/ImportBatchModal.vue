@@ -3,7 +3,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>Import Batch Detail</h3>
-        <button @click="$emit('close')" class="close-btn" aria-label="Close import detail modal">
+        <button @click="$emit('close')" class="close-btn" aria-label="Close detail modal">
           <i class="pi pi-times"></i>
         </button>
       </div>
@@ -14,53 +14,45 @@
             <span>{{ batch.filename }}</span>
           </div>
           <div class="detail-item">
+            <label>Type:</label>
+            <span>{{ batch.type === 'sheet' ? 'Mutasi Stock Sheet' : 'Mutasi Roll' }}</span>
+          </div>
+          <div class="detail-item">
             <label>Status:</label>
-            <span :class="'status-badge status-' + batch.status">{{ batch.status }}</span>
+            <span>{{ batch.status }}</span>
           </div>
           <div class="detail-item">
             <label>Total Rows:</label>
-            <span>{{ batch.total_rows || 0 }}</span>
+            <span>{{ batch.total_rows ?? '-' }}</span>
           </div>
           <div class="detail-item">
             <label>Success:</label>
-            <span class="text-success">{{ batch.success_count || 0 }}</span>
+            <span>{{ batch.success_count ?? '-' }}</span>
           </div>
           <div class="detail-item">
             <label>Failed:</label>
-            <span class="text-danger">{{ batch.failed_count || 0 }}</span>
-          </div>
-          <div class="detail-item full-width">
-            <label>Created At:</label>
-            <span>{{ formatDate(batch.created_at) }}</span>
+            <span>{{ batch.failed_count ?? '-' }}</span>
           </div>
         </div>
 
-        <!-- Error List -->
-        <div v-if="errors.length > 0" class="errors-section">
-          <h4>Errors ({{ errors.length }})</h4>
-          <div class="error-table-wrapper">
-            <table class="error-table">
-              <thead>
-                <tr>
-                  <th>Row</th>
-                  <th>LotID</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="err in errors" :key="err.id">
-                  <td>{{ err.row_number || '-' }}</td>
-                  <td>{{ err.lot_id || '-' }}</td>
-                  <td>{{ err.reason }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div v-else-if="batch.status === 'success'" class="no-errors">
-          <i class="pi pi-check-circle"></i>
-          <span>No errors in this import.</span>
+        <div v-if="batch.errors && batch.errors.length > 0" class="errors-section">
+          <h4>Baris Gagal ({{ batch.errors.length }})</h4>
+          <table class="errors-table">
+            <thead>
+              <tr>
+                <th>Row</th>
+                <th>LotID</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="err in batch.errors" :key="err.id">
+                <td>{{ err.row_number }}</td>
+                <td>{{ err.lot_id || '-' }}</td>
+                <td>{{ err.reason }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -68,29 +60,18 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   batch: {
     type: Object,
     required: true,
   },
-  errors: {
+  history: {
     type: Array,
     default: () => [],
   },
 });
 
 defineEmits(['close']);
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 </script>
 
 <style scoped>
@@ -123,6 +104,7 @@ const formatDate = (dateString) => {
   align-items: center;
   padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
 }
 
 .modal-header h3 {
@@ -162,10 +144,6 @@ const formatDate = (dateString) => {
   gap: 0.25rem;
 }
 
-.detail-item.full-width {
-  grid-column: 1 / -1;
-}
-
 .detail-item label {
   font-size: 0.875rem;
   color: #64748b;
@@ -177,22 +155,6 @@ const formatDate = (dateString) => {
   color: #1e293b;
 }
 
-.text-success { color: #166534; }
-.text-danger { color: #dc2626; }
-
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  width: fit-content;
-}
-
-.status-processing { background: #dbeafe; color: #1e40af; }
-.status-success { background: #dcfce7; color: #166534; }
-.status-failed { background: #fee2e2; color: #991b1b; }
-
 .errors-section {
   margin-top: 2rem;
   border-top: 1px solid #e5e7eb;
@@ -202,47 +164,24 @@ const formatDate = (dateString) => {
 .errors-section h4 {
   font-size: 1rem;
   color: #991b1b;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-.error-table-wrapper {
-  overflow-x: auto;
-}
-
-.error-table {
+.errors-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
 }
 
-.error-table th {
-  background: #f8fafc;
-  padding: 0.75rem;
+.errors-table th {
   text-align: left;
+  padding: 0.5rem;
   font-weight: 600;
-  color: #475569;
-  border-bottom: 2px solid #e5e7eb;
+  background: #fef2f2;
+  border-bottom: 1px solid #fee2e2;
 }
 
-.error-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-  color: #475569;
-}
-
-.no-errors {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: #dcfce7;
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #166534;
-}
-
-.no-errors i {
-  font-size: 1.25rem;
+.errors-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
 }
 </style>
-

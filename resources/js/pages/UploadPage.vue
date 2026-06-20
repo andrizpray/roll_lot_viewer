@@ -1,156 +1,79 @@
 <template>
   <div class="upload-page">
-    <div class="header">
-      <h2>Upload Excel File</h2>
-    </div>
+    <h2>Upload & Import</h2>
 
-    <!-- Upload Area -->
     <div class="upload-section">
       <div
-        class="drop-zone"
-        @dragover="handleDragOver"
-        @dragleave="handleDragLeave"
-        @drop="handleDrop"
-        @click="$refs.fileInput.click()"
+        class="dropzone"
+        :class="{ active: isDragging }"
+        @dragover.prevent="isDragging = true"
+        @dragleave.prevent="isDragging = false"
+        @drop.prevent="handleDrop"
       >
-        <i class="pi pi-upload upload-icon"></i>
-        <p class="drop-text">
-          Drag & drop Excel file here or <span class="browse-text">browse</span>
-        </p>
+        <i class="pi pi-upload dropzone-icon"></i>
+        <p>Drag & drop your Excel file here, or</p>
+        <label for="file-upload" class="btn btn-primary">Browse Files</label>
         <input
-          ref="fileInput"
+          id="file-upload"
           type="file"
-          class="file-input"
           accept=".xlsx,.xls"
           @change="handleFileSelect"
+          hidden
         />
       </div>
 
-      <div v-if="selectedFile" class="file-info">
-        <p><strong>Selected:</strong> {{ selectedFile.name }}</p>
-        <p><strong>Size:</strong> {{ formatFileSize(selectedFile.size) }}</p>
-        <button @click="removeFile" class="btn btn-danger">Remove</button>
-      </div>
-    </div>
-
-    <!-- Upload Button -->
-    <button
-      @click="uploadFile"
-      :disabled="!selectedFile || isUploading"
-      class="btn btn-primary"
-    >
-      <i v-if="isUploading" class="pi pi-spin pi-spinner"></i>
-      {{ isUploading ? 'Uploading...' : 'Upload & Process' }}
-    </button>
-
-    <!-- Progress -->
-    <div v-if="isUploading" class="progress-section">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
-      </div>
-      <p class="progress-text">{{ progressText }}</p>
-    </div>
-
-    <!-- Results -->
-    <div v-if="lastBatch" class="results-section">
-      <h3>Import Results</h3>
-      <div class="result-cards">
-        <div class="result-card success">
-          <i class="pi pi-check-circle"></i>
-          <div class="card-content">
-            <span class="label">Status</span>
-            <span class="value" :class="'status-' + lastBatch.status">{{ lastBatch.status }}</span>
-          </div>
+      <div v-if="uploadProgress > 0" class="progress-section">
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar" :style="{ width: uploadProgress + '%' }"></div>
         </div>
-        <div class="result-card">
-          <i class="pi pi-file-excel"></i>
-          <div class="card-content">
-            <span class="label">Filename</span>
-            <span class="value">{{ lastBatch.filename }}</span>
-          </div>
-        </div>
-        <div class="result-card">
-          <i class="pi pi-list"></i>
-          <div class="card-content">
-            <span class="label">Total Rows</span>
-            <span class="value">{{ lastBatch.total_rows }}</span>
-          </div>
-        </div>
-        <div class="result-card success">
-          <i class="pi pi-check"></i>
-          <div class="card-content">
-            <span class="label">Success</span>
-            <span class="value">{{ lastBatch.success_count }}</span>
-          </div>
-        </div>
-        <div class="result-card warning">
-          <i class="pi pi-exclamation-triangle"></i>
-          <div class="card-content">
-            <span class="label">Failed</span>
-            <span class="value">{{ lastBatch.failed_count }}</span>
-          </div>
-        </div>
+        <p class="progress-text">{{ progressText }}</p>
       </div>
     </div>
 
     <!-- Import History -->
     <div class="history-section">
-      <div class="history-header">
-        <h3>Import History</h3>
-        <button @click="refreshHistory" class="btn btn-sm btn-secondary">
-          <i class="pi pi-refresh"></i> Refresh
-        </button>
-      </div>
-
-      <!-- Empty State -->
-      <div v-if="!loadingHistory && importHistory.length === 0" class="empty-state">
-        <i class="pi pi-inbox empty-icon"></i>
-        <h3>No Import History</h3>
-        <p>Upload an Excel file above to get started.</p>
-      </div>
-
-      <div v-if="loadingHistory" class="loading-text">Loading history...</div>
-
-      <table v-if="importHistory.length > 0" class="history-table">
+      <h3>Import History</h3>
+      <table class="history-table">
         <thead>
           <tr>
-            <th>Filename</th>
-            <th>Date</th>
-            <th>Total</th>
+            <th>File</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Total Rows</th>
             <th>Success</th>
             <th>Failed</th>
-            <th>Status</th>
+            <th>Date</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="batch in importHistory" :key="batch.id">
-            <td>{{ batch.filename }}</td>
-            <td>{{ formatDate(batch.created_at) }}</td>
-            <td>{{ batch.total_rows }}</td>
-            <td>{{ batch.success_count }}</td>
-            <td>{{ batch.failed_count }}</td>
+            <td class="filename">{{ batch.filename }}</td>
             <td>
-              <span :class="['status-badge', 'status-' + batch.status]">
-                {{ batch.status }}
+              <span :class="['type-badge', 'type-' + batch.type]">
+                {{ batch.type === 'sheet' ? 'Sheet' : 'Roll' }}
               </span>
             </td>
             <td>
-              <button @click="showDetails(batch)" class="btn btn-sm btn-secondary">
-                <i class="pi pi-eye"></i>
-              </button>
+              <span :class="['status-badge', 'status-' + batch.status]">{{ batch.status }}</span>
+            </td>
+            <td>{{ batch.total_rows ?? '-' }}</td>
+            <td>{{ batch.success_count ?? '-' }}</td>
+            <td>{{ batch.failed_count ?? '-' }}</td>
+            <td>{{ batch.created_at }}</td>
+            <td>
+              <button @click="viewDetails(batch)" class="btn btn-sm btn-secondary">Details</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- History Modal -->
     <ImportBatchModal
-      v-if="showHistoryModal"
-      :batch="currentBatch"
-      :errors="currentErrors"
-      @close="showHistoryModal = false"
+      v-if="selectedImport"
+      :batch="selectedImport"
+      :history="importHistory"
+      @close="selectedImport = null"
     />
   </div>
 </template>
@@ -160,161 +83,98 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import ImportBatchModal from '../components/ImportBatchModal.vue';
 
-const fileInput = ref(null);
-const selectedFile = ref(null);
-const isUploading = ref(false);
+const selectedImport = ref(null);
+const importHistory = ref([]);
 const uploadProgress = ref(0);
 const progressText = ref('');
-const lastBatch = ref(null);
-const importHistory = ref([]);
-const showHistoryModal = ref(false);
-const currentBatch = ref(null);
-const currentErrors = ref([]);
-const loadingHistory = ref(false);
+const isDragging = ref(false);
 
-const handleDragOver = (e) => {
-  e.preventDefault();
-};
-
-const handleDragLeave = (e) => {
-  e.preventDefault();
-};
-
-const handleDrop = (e) => {
-  e.preventDefault();
-  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-    selectedFile.value = e.dataTransfer.files[0];
-  }
-};
-
-const handleFileSelect = (e) => {
-  if (e.target.files && e.target.files[0]) {
-    selectedFile.value = e.target.files[0];
-  }
-};
-
-const removeFile = () => {
-  selectedFile.value = null;
-  fileInput.value.value = '';
-};
-
-const formatFileSize = (bytes) => {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-};
-
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const uploadFile = async () => {
-  if (!selectedFile.value) return;
-
-  isUploading.value = true;
-  uploadProgress.value = 0;
-  progressText.value = 'Starting upload...';
-
-  const formData = new FormData();
-  formData.append('file', selectedFile.value);
-
-  try {
-    const response = await axios.post('/api/imports', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (e) => {
-        if (e.total) {
-          uploadProgress.value = Math.round((e.loaded * 100) / e.total);
-          progressText.value = `Uploading... ${uploadProgress.value}%`;
-        }
-      },
-    });
-
-    uploadProgress.value = 100;
-    progressText.value = 'Processing in background...';
-
-    // Start polling status
-    pollStatus(response.data.batch_id);
-  } catch (error) {
-    isUploading.value = false;
-    progressText.value = 'Upload failed';
-    console.error('Upload failed:', error);
-  }
-};
-
-const pollStatus = async (batchId) => {
-  let retryCount = 0;
-  const maxRetries = 5;
-  const checkStatus = async () => {
-    try {
-      const response = await axios.get(`/api/imports/${batchId}/status`);
-      const data = response.data;
-
-      if (data.status === 'success') {
-        isUploading.value = false;
-        progressText.value = 'Import completed successfully';
-        lastBatch.value = data;
-        fetchHistory();
-      } else if (data.status === 'failed') {
-        isUploading.value = false;
-        progressText.value = 'Import failed';
-      } else {
-        // Still processing
-        progressText.value = `Processing... ${data.success_count + data.failed_count}/${data.total_rows} rows processed`;
-        retryCount = 0;
-        setTimeout(checkStatus, 2000);
-      }
-    } catch (error) {
-      console.error('Status check failed:', error);
-      if (retryCount < maxRetries) {
-        retryCount++;
-        setTimeout(checkStatus, 3000);
-      } else {
-        isUploading.value = false;
-        progressText.value = 'Status check failed after multiple retries';
-      }
-    }
-  };
-
-  checkStatus();
-};
-
-const fetchHistory = async () => {
-  loadingHistory.value = true;
+const loadHistory = async () => {
   try {
     const response = await axios.get('/api/imports');
     importHistory.value = response.data.data || [];
   } catch (error) {
-    console.error('Failed to fetch history:', error);
-  } finally {
-    loadingHistory.value = false;
+    console.error('Failed to load import history:', error);
   }
 };
 
-const showDetails = async (batch) => {
+const uploadFile = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    uploadProgress.value = 1;
+    progressText.value = 'Uploading...';
+
+    const response = await axios.post('/api/imports', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        }
+      },
+    });
+
+    const batchId = response.data.batch_id;
+    progressText.value = 'Processing file...';
+
+    // Poll for completion
+    let retryCount = 0;
+    const checkStatus = async () => {
+      try {
+        const statusRes = await axios.get(`/api/imports/${batchId}/status`);
+        const status = statusRes.data.status;
+
+        if (status === 'success') {
+          uploadProgress.value = 100;
+          progressText.value = `Import selesai! ${statusRes.data.success_count} berhasil, ${statusRes.data.failed_count} gagal.`;
+          retryCount = 0; // reset retry counter setelah request berhasil
+          await loadHistory();
+        } else if (status === 'failed') {
+          progressText.value = 'Import gagal.';
+          await loadHistory();
+        } else {
+          throw new Error('Still processing');
+        }
+      } catch (error) {
+        if (retryCount < 30) {
+          retryCount++;
+          setTimeout(checkStatus, 2000);
+        } else {
+          progressText.value = 'Gagal memantau status import. Coba refresh halaman.';
+        }
+      }
+    };
+
+    checkStatus();
+  } catch (error) {
+    uploadProgress.value = 0;
+    progressText.value = 'Upload failed: ' + (error.response?.data?.message || error.message);
+  }
+};
+
+const handleDrop = (event) => {
+  isDragging.value = false;
+  const file = event.dataTransfer.files[0];
+  if (file) uploadFile(file);
+};
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0];
+  if (file) uploadFile(file);
+};
+
+const viewDetails = async (batch) => {
   try {
     const response = await axios.get(`/api/imports/${batch.id}`);
-    currentBatch.value = response.data;
-    currentErrors.value = response.data.errors || [];
-    showHistoryModal.value = true;
+    selectedImport.value = response.data;
   } catch (error) {
-    console.error('Failed to fetch batch details:', error);
+    console.error('Failed to load import details:', error);
   }
-};
-
-const refreshHistory = () => {
-  fetchHistory();
 };
 
 onMounted(() => {
-  fetchHistory();
+  loadHistory();
 });
 </script>
 
@@ -323,13 +183,10 @@ onMounted(() => {
   padding: 2rem 0;
 }
 
-.header {
-  margin-bottom: 2rem;
-}
-
-.header h2 {
+.upload-page h2 {
   font-size: 1.75rem;
   color: #1e293b;
+  margin-bottom: 2rem;
 }
 
 .upload-section {
@@ -340,187 +197,97 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.drop-zone {
-  border: 2px dashed #cbd5e1;
+.dropzone {
+  border: 2px dashed #e5e7eb;
   border-radius: 0.75rem;
   padding: 3rem 2rem;
   text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  position: relative;
-}
-
-.drop-zone:hover {
-  border-color: #0ea5e9;
-  background: #f8fafc;
-}
-
-.drop-zone .file-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0;
+  transition: all 0.2s;
   cursor: pointer;
 }
 
-.upload-icon {
-  font-size: 4rem;
-  color: #cbd5e1;
+.dropzone.active {
+  border-color: #1E40AF;
+  background: #eef2ff;
+}
+
+.dropzone-icon {
+  font-size: 3rem;
+  color: #94a3b8;
   margin-bottom: 1rem;
 }
 
-.drop-text {
+.dropzone p {
   color: #64748b;
-  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
 }
 
-.browse-text {
-  color: #0ea5e9;
-  font-weight: 600;
-}
-
-.file-info {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 0.5rem;
-  display: flex;
-  justify-content: space-between;
+.btn {
+  display: inline-flex;
   align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
 }
 
-.file-info p {
-  margin: 0.25rem 0;
+.btn-primary {
+  background: #1E40AF;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1E3A8A;
+}
+
+.btn-secondary {
+  background: #f1f5f9;
   color: #475569;
 }
 
-.progress-section {
-  margin: 2rem 0;
+.btn-secondary:hover {
+  background: #e2e8f0;
 }
 
-.progress-bar {
-  width: 100%;
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.progress-section {
+  margin-top: 1.5rem;
+}
+
+.progress-bar-wrapper {
   height: 0.75rem;
   background: #e5e7eb;
   border-radius: 0.375rem;
   overflow: hidden;
 }
 
-.progress-fill {
+.progress-bar {
   height: 100%;
-  background: #0ea5e9;
+  background: #1E40AF;
+  border-radius: 0.375rem;
   transition: width 0.3s ease;
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.empty-state h3 {
-  font-size: 1.25rem;
-  color: #475569;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  color: #94a3b8;
-  margin-bottom: 1.5rem;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  color: #cbd5e1;
-  margin-bottom: 1rem;
-}
-
-.loading-text {
-  text-align: center;
-  padding: 2rem;
+.progress-text {
+  margin-top: 0.5rem;
   color: #64748b;
-  font-style: italic;
-}
-
-.results-section {
-  background: white;
-  padding: 2rem;
-  border-radius: 0.75rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.results-section h3 {
-  margin-bottom: 1.5rem;
-  font-size: 1.25rem;
-  color: #1e293b;
-}
-
-.result-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-}
-
-.result-card {
-  padding: 1.5rem;
-  border-radius: 0.5rem;
-  text-align: center;
-}
-
-.result-card i {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.card-content .label {
-  display: block;
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-bottom: 0.25rem;
-}
-
-.card-content .value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.result-card.success {
-  background: #dcfce7;
-}
-
-.result-card.success i {
-  color: #166534;
-}
-
-.result-card.warning {
-  background: #fef3c7;
-}
-
-.result-card.warning i {
-  color: #92400e;
-}
-
-.result-card i {
-  color: #0ea5e9;
-}
-
-.result-card.warning .value {
-  color: #92400e;
-}
-
-.result-card.success .value {
-  color: #166534;
-}
-
-.result-card i {
-  color: #0ea5e9;
+  font-size: 0.875rem;
 }
 
 .history-section {
@@ -530,21 +297,21 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.history-header h3 {
+.history-section h3 {
   font-size: 1.25rem;
   color: #1e293b;
+  margin-bottom: 1.5rem;
 }
 
 .history-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 700px;
+}
+
+.history-table thead {
+  background: #f8fafc;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .history-table th {
@@ -552,12 +319,22 @@ onMounted(() => {
   text-align: left;
   font-weight: 600;
   color: #475569;
-  border-bottom: 2px solid #e5e7eb;
 }
 
 .history-table td {
   padding: 1rem;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.history-table tr:hover {
+  background: #f8fafc;
+}
+
+.filename {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-badge {
@@ -581,5 +358,23 @@ onMounted(() => {
 .status-failed {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.type-roll {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.type-sheet {
+  background: #fae8ff;
+  color: #86198f;
 }
 </style>
