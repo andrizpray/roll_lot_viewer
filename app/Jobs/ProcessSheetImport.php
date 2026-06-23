@@ -9,6 +9,7 @@ use App\Models\PaperSheet;
 use App\Services\SheetDescriptionParser;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ProcessSheetImport implements ShouldQueue
@@ -43,8 +44,10 @@ class ProcessSheetImport implements ShouldQueue
         $parser = new SheetDescriptionParser();
 
         try {
-            // Snapshot existing lot_ids before import
-            $oldLotIds = PaperSheet::pluck('lot_id')->toArray();
+            // Snapshot existing lot_ids before import (with lock to prevent race condition)
+            $oldLotIds = DB::transaction(function () {
+                return PaperSheet::lockForUpdate()->pluck('lot_id')->toArray();
+            });
 
             $sheetImport = new SheetImport($this->importBatchId, $parser);
             Excel::import($sheetImport, $this->filePath);

@@ -301,7 +301,8 @@ const detectedLotIds = computed(() => {
   const input = batchLotIds.value;
   if (!input.trim()) return [];
   const lotIds = input.split(/[\s,;]+/).filter(id => id.trim());
-  return [...new Set(lotIds.map(id => id.toUpperCase()))];
+  const unique = [...new Set(lotIds.map(id => id.toUpperCase()))];
+  return unique.slice(0, 1000); // Limit to 1000 IDs to prevent DoS
 });
 
 const fetchDistinctValues = async () => {

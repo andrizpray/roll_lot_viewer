@@ -9,6 +9,7 @@ use App\Models\RollLot;
 use App\Services\DescriptionParser;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ProcessExcelImport implements ShouldQueue
@@ -46,8 +47,10 @@ class ProcessExcelImport implements ShouldQueue
         $parser = new DescriptionParser();
 
         try {
-            // Snapshot existing lot_ids before import
-            $oldLotIds = RollLot::pluck('lot_id')->toArray();
+            // Snapshot existing lot_ids before import (with lock to prevent race condition)
+            $oldLotIds = DB::transaction(function () {
+                return RollLot::lockForUpdate()->pluck('lot_id')->toArray();
+            });
 
             // Use chunked import to avoid loading entire Excel file into memory
             // WithChunkReading processes in 500-row batches with low memory footprint

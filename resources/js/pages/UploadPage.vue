@@ -185,8 +185,16 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { onUnmounted } from 'vue';
 import axios from 'axios';
 import ImportBatchModal from '../components/ImportBatchModal.vue';
+
+// Poll cancellation flag
+let pollCancelled = false;
+
+onUnmounted(() => {
+  pollCancelled = true;
+});
 
 const selectedImport = ref(null);
 const importHistory = ref([]);
@@ -261,7 +269,6 @@ const uploadFile = async (file) => {
 
     // Poll for completion
     let retryCount = 0;
-    let pollCancelled = false;
     const checkStatus = async () => {
       if (pollCancelled) return;
       try {

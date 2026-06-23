@@ -11,6 +11,9 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ExportController extends Controller
 {
+    // Maximum rows allowed for export to prevent DoS
+    private const MAX_EXPORT_ROWS = 10000;
+
     /**
      * Export roll lots or paper sheets as XLSX based on active filter mode.
      *
@@ -27,10 +30,32 @@ class ExportController extends Controller
 
         if ($resource === 'sheet') {
             $rows = $mode === 'batch' ? $this->getBatchRows($request, PaperSheet::class) : $this->getAdvancedSheetRows($request);
+            
+            // Check row limit
+            if ($rows->count() > self::MAX_EXPORT_ROWS) {
+                return response()->json([
+                    'error' => 'Export terlalu besar',
+                    'message' => 'Maksimal ' . self::MAX_EXPORT_ROWS . ' rows. Gunakan filter untuk mempersempit data.',
+                    'total_rows' => $rows->count(),
+                    'max_allowed' => self::MAX_EXPORT_ROWS,
+                ], 413);
+            }
+            
             $export = new SheetsExport($rows);
             $filename = 'paper_sheets_' . now()->format('Ymd_His') . '.xlsx';
         } else {
             $rows = $mode === 'batch' ? $this->getBatchRows($request, RollLot::class) : $this->getAdvancedRollRows($request);
+            
+            // Check row limit
+            if ($rows->count() > self::MAX_EXPORT_ROWS) {
+                return response()->json([
+                    'error' => 'Export terlalu besar',
+                    'message' => 'Maksimal ' . self::MAX_EXPORT_ROWS . ' rows. Gunakan filter untuk mempersempit data.',
+                    'total_rows' => $rows->count(),
+                    'max_allowed' => self::MAX_EXPORT_ROWS,
+                ], 413);
+            }
+            
             $export = new RollLotsExport($rows);
             $filename = 'roll_lots_' . now()->format('Ymd_His') . '.xlsx';
         }
@@ -44,6 +69,9 @@ class ExportController extends Controller
         $lotIds = preg_split('/[\s,;]+/', trim($input));
         $lotIds = array_filter(array_map('trim', $lotIds));
         $lotIds = array_unique(array_map('strtoupper', $lotIds));
+
+        // Limit batch input to prevent DoS
+        $lotIds = array_slice($lotIds, 0, 1000);
 
         return $modelClass::searchByLotIds($lotIds)->get();
     }
@@ -63,7 +91,8 @@ class ExportController extends Controller
         if (!empty($filters['date_to'])) $query->whereDate('source_tr_date', '<=', $filters['date_to']);
         if (!empty($filters['lot_id'])) $query->where('lot_id', 'like', '%' . $filters['lot_id'] . '%');
 
-        return $query->orderBy('lot_id')->get();
+        // Limit advanced query to prevent DoS
+        return $query->orderBy('lot_id')->limit(self::MAX_EXPORT_ROWS + 1)->get();
     }
 
     protected function getAdvancedSheetRows(Request $request)
@@ -80,6 +109,7 @@ class ExportController extends Controller
         if (!empty($filters['date_to'])) $query->whereDate('source_tr_date', '<=', $filters['date_to']);
         if (!empty($filters['lot_id'])) $query->where('lot_id', 'like', '%' . $filters['lot_id'] . '%');
 
-        return $query->orderBy('lot_id')->get();
+        // Limit advanced query to prevent DoS
+        return $query->orderBy('lot_id')->limit(self::MAX_EXPORT_ROWS + 1)->get();
     }
 }

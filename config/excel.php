@@ -244,7 +244,7 @@ return [
         | Drivers: memory|illuminate|batch
         |
         */
-        'driver'      => 'memory',
+        'driver'      => 'batch', // Use batch to reduce memory for large files
 
         /*
         |--------------------------------------------------------------------------
