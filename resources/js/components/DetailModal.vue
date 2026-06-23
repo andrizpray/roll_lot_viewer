@@ -76,6 +76,10 @@
             <label>Description</label>
             <span class="val-desc">{{ lot.description_raw || '-' }}</span>
           </div>
+          <div class="detail-item full-width">
+            <label>Comments</label>
+            <span class="val-comments">{{ lot.comments || '-' }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -185,6 +189,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEsc));
 .val-weight { font-weight: 700; color: #059669; }
 .val-muted { color: #94a3b8 !important; }
 .val-desc { color: #64748b; line-height: 1.5; }
+.val-comments { color: #64748b; line-height: 1.5; white-space: pre-wrap; }
 
 /* Grade tags */
 .grade-tag {
