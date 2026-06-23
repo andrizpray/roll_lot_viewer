@@ -263,7 +263,7 @@ const uploadFile = async (file) => {
       },
     });
 
-    const batchId = response.data.batch_id;
+    const jobId = response.data.job_id;
     uploadStatus.value = 'processing';
     progressText.value = 'Processing file...';
 
@@ -272,10 +272,10 @@ const uploadFile = async (file) => {
     const checkStatus = async () => {
       if (pollCancelled) return;
       try {
-        const statusRes = await axios.get(`/api/imports/${batchId}/status`);
+        const statusRes = await axios.get(`/api/imports/${jobId}/status`);
         const status = statusRes.data.status;
 
-        if (status === 'success') {
+        if (status === 'completed') {
           uploadProgress.value = 100;
           uploadStatus.value = 'success';
           uploadResult.value = {

@@ -34,3 +34,10 @@ Thumbs.db
 /public/build/.vite/
 
 switchit/
+__pycache__/
+*.pyc
+.opencode/
+composer.phar
+public/test.txt
+docs/superpowers/
+*.xlsx

@@ -448,19 +448,37 @@ const exportData = async () => {
         }
       });
     }
-    const response = await axios.get('/api/export', {
-      params,
-      responseType: 'blob',
-    });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `roll_lots_${new Date().getTime()}.xlsx`);
-    document.body.appendChild(link);
-    link.click();
-    link.parentElement.removeChild(link);
+
+    // Create export job
+    const response = await axios.get('/api/export', { params });
+    const jobId = response.data.job_id;
+
+    // Poll for completion
+    let attempts = 0;
+    const maxAttempts = 120; // 2 minutes
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const statusRes = await axios.get(`/api/export/${jobId}/status`);
+      const status = statusRes.data.status;
+
+      if (status === 'completed') {
+        // Download the file
+        window.location.href = `/api/export/${jobId}/download`;
+        return;
+      }
+
+      if (status === 'failed') {
+        throw new Error(statusRes.data.error_message || 'Export failed');
+      }
+
+      attempts++;
+    }
+
+    throw new Error('Export timeout');
   } catch (error) {
     console.error('Export failed:', error);
+    alert('Export gagal: ' + (error.message || 'Unknown error'));
   }
 };
 

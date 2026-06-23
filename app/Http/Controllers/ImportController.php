@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ImportBatch;
-use App\Jobs\ProcessExcelImport;
-use App\Jobs\ProcessSheetImport;
+use App\Models\ImportJob;
 use App\Services\ExcelTypeDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,14 +11,11 @@ use Maatwebsite\Excel\Facades\Excel;
 class ImportController extends Controller
 {
     /**
-     * Upload and process Excel file.
-     *
-     * Tipe file (Roll / Sheet) dideteksi otomatis dari header kolom pada
-     * sheet "Data", supaya user tidak perlu pilih tipe secara manual.
+     * Upload Excel file, detect type, create import_jobs record.
+     * Python worker picks it up and processes it.
      */
     public function upload(Request $request)
     {
-        // Baca file buat deteksi tipe + upload = butuh memory ekstra
         ini_set('memory_limit', '512M');
 
         $request->validate([
@@ -30,90 +25,80 @@ class ImportController extends Controller
         $file = $request->file('file');
         $filename = $file->getClientOriginalName();
 
-        // Store file temporarily
+        // Store file in uploads directory
         $path = $file->store('imports');
 
-        // Deteksi tipe file dari header sheet "Data" sebelum dispatch job
+        // Detect type from Excel headers
         $type = $this->detectType(Storage::path($path));
 
-        // Create import batch record
-        $batch = ImportBatch::create([
+        // Create job record for Python worker
+        $job = ImportJob::create([
             'filename' => $filename,
-            'type' => $type,
-            'status' => 'processing',
+            'type'     => $type,
+            'status'   => 'pending',
         ]);
 
-        // Dispatch job sesuai tipe yang terdeteksi
-        if ($type === ExcelTypeDetector::TYPE_SHEET) {
-            ProcessSheetImport::dispatch($batch->id, Storage::path($path));
-        } else {
-            ProcessExcelImport::dispatch($batch->id, Storage::path($path));
-        }
-
         return response()->json([
-            'message' => 'File uploaded successfully. Processing in background.',
-            'batch_id' => $batch->id,
-            'type' => $type,
+            'message'  => 'File uploaded successfully. Waiting for worker to process.',
+            'job_id'   => $job->id,
+            'filename' => $filename,
+            'type'     => $type,
         ], 202);
     }
 
     /**
-     * Baca header baris pertama sheet "Data" (atau sheet pertama bila tidak
-     * ada sheet bernama "Data") lalu tentukan tipenya.
+     * Read first header row of sheet "Data" (or first sheet if none named
+     * "Data") and determine type.
      */
     protected function detectType(string $filePath): string
     {
         try {
             $sheets = Excel::toArray([], $filePath);
-            // Laravel Excel mengembalikan array of sheets (terurut sesuai
-            // urutan di file); ambil sheet pertama sebagai default.
             $firstSheet = $sheets[0] ?? [];
             $headerRow = $firstSheet[0] ?? [];
 
             return (new ExcelTypeDetector())->detect($headerRow);
         } catch (\Throwable $e) {
-            // Kalau gagal dibaca di sini, biarkan job yang dispatch nanti
-            // menangkap errornya sendiri secara lebih detail. Default ke roll.
             return ExcelTypeDetector::TYPE_ROLL;
         }
     }
 
     /**
-     * Get import batch history with pagination.
+     * List all import jobs with pagination.
      */
     public function index(Request $request)
     {
-        $batches = ImportBatch::orderBy('created_at', 'desc')
+        $jobs = ImportJob::orderBy('created_at', 'desc')
             ->paginate(20);
 
-        return response()->json($batches);
+        return response()->json($jobs);
     }
 
     /**
-     * Get single import batch details with errors.
+     * Get single import job details.
      */
     public function show($id)
     {
-        $batch = ImportBatch::with('errors')->findOrFail($id);
+        $job = ImportJob::findOrFail($id);
 
-        return response()->json($batch);
+        return response()->json($job);
     }
 
     /**
-     * Get import batch status (for polling during processing).
+     * Get job status for polling.
      */
     public function status($id)
     {
-        $batch = ImportBatch::findOrFail($id);
+        $job = ImportJob::findOrFail($id);
 
         return response()->json([
-            'id' => $batch->id,
-            'filename' => $batch->filename,
-            'type' => $batch->type,
-            'status' => $batch->status,
-            'total_rows' => $batch->total_rows,
-            'success_count' => $batch->success_count,
-            'failed_count' => $batch->failed_count,
+            'id'            => $job->id,
+            'filename'      => $job->filename,
+            'type'          => $job->type,
+            'status'        => $job->status,
+            'total_rows'    => $job->total_rows,
+            'success_count' => $job->success_count,
+            'failed_count'  => $job->failed_count,
         ]);
     }
 }

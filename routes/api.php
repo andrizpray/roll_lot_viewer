@@ -27,5 +27,7 @@ Route::get('/sheets', [PaperSheetController::class, 'index']);
 Route::get('/sheets/distinct-values', [PaperSheetController::class, 'distinctValues']);
 Route::get('/sheets/{id}', [PaperSheetController::class, 'show']);
 
-// Export route
+// Export routes
 Route::get('/export', [ExportController::class, 'export']);
+Route::get('/export/{id}/status', [ExportController::class, 'status']);
+Route::get('/export/{id}/download', [ExportController::class, 'download']);
