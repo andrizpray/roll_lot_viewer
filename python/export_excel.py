@@ -14,19 +14,7 @@ from config import EXPORT_DIR, MAX_EXPORT_ROWS
 
 
 def export_roll_lots(job_id, filters=None, mode="roll"):
-    """Export roll lots or paper sheets to an Excel file.
-
-    Args:
-        job_id: The export_jobs.id to update.
-        filters: Dict of optional filter criteria.
-        mode: 'roll' for roll_lots, 'sheet' for paper_sheets.
-
-    Returns:
-        Path to the generated .xlsx file.
-
-    Raises:
-        RuntimeError: On write failure.
-    """
+    """Export roll lots or paper sheets to an Excel file."""
     filters = filters or {}
 
     # Determine table based on mode
@@ -37,42 +25,42 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     params = []
 
     if filters.get("item_id"):
-        where_clauses.append("item_id = %s")
+        where_clauses.append("item_id = ?")
         params.append(filters["item_id"])
 
     if filters.get("grade"):
-        where_clauses.append("grade = %s")
+        where_clauses.append("grade = ?")
         params.append(filters["grade"])
 
     if filters.get("papertype"):
-        where_clauses.append("papertype LIKE %s")
+        where_clauses.append("papertype LIKE ?")
         params.append(f"%{filters['papertype']}%")
 
     if filters.get("gramature"):
-        where_clauses.append("gramature LIKE %s")
+        where_clauses.append("gramature LIKE ?")
         params.append(f"%{filters['gramature']}%")
 
     if filters.get("width"):
-        where_clauses.append("width LIKE %s")
+        where_clauses.append("width LIKE ?")
         params.append(f"%{filters['width']}%")
 
     if filters.get("lot_id"):
-        where_clauses.append("lot_id LIKE %s")
+        where_clauses.append("lot_id LIKE ?")
         params.append(f"%{filters['lot_id']}%")
 
     if filters.get("date_from"):
-        where_clauses.append("source_tr_date >= %s")
+        where_clauses.append("source_tr_date >= ?")
         params.append(filters["date_from"])
 
     if filters.get("date_to"):
-        where_clauses.append("source_tr_date <= %s")
+        where_clauses.append("source_tr_date <= ?")
         params.append(filters["date_to"])
 
     # Batch mode: specific lot_ids
     if filters.get("lot_ids"):
         lot_ids = filters["lot_ids"]
         if lot_ids:
-            placeholders = ", ".join(["%s"] * len(lot_ids))
+            placeholders = ", ".join(["?"] * len(lot_ids))
             where_clauses.append(f"lot_id IN ({placeholders})")
             params.extend(lot_ids)
 

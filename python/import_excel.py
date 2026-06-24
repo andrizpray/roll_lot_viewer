@@ -31,26 +31,17 @@ COLUMN_MAP = {
 
 
 def import_roll_lots(job_id, filepath):
-    """Import roll lots or paper sheets from an Excel file.
-
-    Args:
-        job_id: The import_jobs.id to update.
-        filepath: Absolute path to the .xlsx file.
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist.
-        ValueError: If the file has no valid data rows.
-    """
+    """Import roll lots or paper sheets from an Excel file."""
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"Import file not found: {filepath}")
 
     # Determine target table from import_jobs.type
     conn = get_connection()
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT type FROM import_jobs WHERE id = %s", (job_id,))
-            result = cur.fetchone()
-            job_type = result["type"] if result else "roll"
+        cur = conn.cursor()
+        cur.execute("SELECT type FROM import_jobs WHERE id = ?", (job_id,))
+        result = cur.fetchone()
+        job_type = result[0] if result else "roll"
     finally:
         conn.close()
 
@@ -73,13 +64,12 @@ def import_roll_lots(job_id, filepath):
     if not db_columns:
         raise ValueError(f"No matching columns found. Excel headers: {headers}")
 
-    # Build INSERT SQL
-    placeholders = ", ".join(["%s"] * len(db_columns))
-    columns = ", ".join([f"`{c}`" for c in db_columns])
+    # Build INSERT SQL — use INSERT OR REPLACE for SQLite
+    placeholders = ", ".join(["?"] * len(db_columns))
+    columns = ", ".join([f'"{c}"' for c in db_columns])
     insert_sql = (
-        f"INSERT INTO {table} ({columns}, import_batch_id) "
-        f"VALUES ({placeholders}, %s) "
-        f"ON DUPLICATE KEY UPDATE weight=VALUES(weight)"
+        f"INSERT OR REPLACE INTO {table} ({columns}, import_batch_id) "
+        f"VALUES ({placeholders}, ?)"
     )
 
     # Process rows
@@ -102,7 +92,6 @@ def import_roll_lots(job_id, filepath):
         if len(batch) >= IMPORT_BATCH_SIZE:
             execute_many(insert_sql, batch)
             success += len(batch)
-            # Update progress
             _update_progress(job_id, total, success)
             batch.clear()
 
@@ -124,18 +113,18 @@ def _update_progress(job_id, total, success, completed=False):
     """Update job progress in import_jobs table."""
     conn = get_connection()
     try:
-        with conn.cursor() as cur:
-            if completed:
-                cur.execute(
-                    "UPDATE import_jobs SET total_rows = %s, success_count = %s, "
-                    "failed_count = %s, status = 'completed' WHERE id = %s",
-                    (total, success, total - success, job_id),
-                )
-            else:
-                cur.execute(
-                    "UPDATE import_jobs SET total_rows = %s, success_count = %s WHERE id = %s",
-                    (total, success, job_id),
-                )
+        cur = conn.cursor()
+        if completed:
+            cur.execute(
+                "UPDATE import_jobs SET total_rows = ?, success_count = ?, "
+                "failed_count = ?, status = 'completed' WHERE id = ?",
+                (total, success, total - success, job_id),
+            )
+        else:
+            cur.execute(
+                "UPDATE import_jobs SET total_rows = ?, success_count = ? WHERE id = ?",
+                (total, success, job_id),
+            )
         conn.commit()
     finally:
         conn.close()

@@ -150,10 +150,26 @@ class RollLotController extends Controller
             ->orderBy('item_id')
             ->pluck('item_id');
 
+        $gramatures = RollLot::query()
+            ->whereNotNull('gramature')
+            ->where('gramature', '!=', '')
+            ->distinct()
+            ->orderBy('gramature')
+            ->pluck('gramature');
+
+        $widths = RollLot::query()
+            ->whereNotNull('width')
+            ->where('width', '!=', '')
+            ->distinct()
+            ->orderBy('width')
+            ->pluck('width');
+
         return response()->json([
             'grades' => $grades->values(),
             'papertypes' => $papertypes->values(),
             'item_ids' => $itemIds->values(),
+            'gramatures' => $gramatures->values(),
+            'dimensions' => $widths->values(),
         ]);
     }
 }

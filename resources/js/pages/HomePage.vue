@@ -87,6 +87,12 @@
           <div class="filter-field">
             <label>Grade:</label>
             <div class="searchable-select">
+              <div class="grade-tags" v-if="filters.grade.length > 0">
+                <span v-for="g in filters.grade" :key="g" class="grade-tag">
+                  {{ g }}
+                  <button @click="removeGrade(g)" class="grade-tag-remove">&times;</button>
+                </span>
+              </div>
               <input
                 type="text"
                 class="input-field"
@@ -101,9 +107,10 @@
                 <li
                   v-for="option in filteredGradeOptions"
                   :key="option.value"
-                  @mousedown.prevent="selectGrade(option)"
-                  :class="{ active: filters.grade === option.value }"
+                  @mousedown.prevent="toggleGrade(option)"
+                  :class="{ active: filters.grade.includes(option.value) }"
                 >
+                  <span class="grade-check">{{ filters.grade.includes(option.value) ? '✓' : '' }}</span>
                   {{ option.label }}
                 </li>
               </ul>
@@ -180,14 +187,14 @@
           v-if="rollLots.length > 0"
           @click="exportData"
           class="btn btn-sm btn-outline"
-          aria-label="Download results as CSV"
+          aria-label="Download data"
         >
           <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download CSV
+          Download Data
         </button>
       </div>
 
@@ -234,7 +241,7 @@
             <td class="cell-muted">{{ lot.diameter ? lot.diameter + 'mm' : '-' }}</td>
             <td class="col-action">
               <button @click="showDetail(lot)" class="btn btn-icon-only" title="View details" aria-label="View details">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
@@ -306,7 +313,7 @@ const filterMode = ref('advanced');
 const batchLotIds = ref('');
 const filters = ref({
   item_id: '',
-  grade: '',
+  grade: [],
   papertype: '',
   gramature: '',
   width: '',
@@ -323,28 +330,49 @@ const distinctValues = ref({
   item_ids: [],
 });
 
-// Grade searchable select state
-const GRADE_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: 'WIPB', label: 'WIPB' },
-  { value: '-', label: '-' },
-];
+
 const gradeSearch = ref('');
 const gradeDropdownOpen = ref(false);
 
 const filteredGradeOptions = computed(() => {
   const search = gradeSearch.value.toLowerCase();
-  if (!search) return GRADE_OPTIONS;
-  return GRADE_OPTIONS.filter(opt => opt.label.toLowerCase().includes(search));
+  const options = [{ value: '', label: 'All' }];
+  if (distinctValues.value.grades) {
+    distinctValues.value.grades.forEach(g => {
+      options.push({ value: g, label: g });
+    });
+  }
+  if (!search) return options;
+  return options.filter(opt => opt.label.toLowerCase().includes(search));
 });
 
 const selectGrade = (option) => {
-  filters.value.grade = option.value;
+  if (option.value === '') {
+    filters.value.grade = [];
+  } else {
+    filters.value.grade = [option.value];
+  }
   gradeSearch.value = option.value === '' ? '' : option.label;
   gradeDropdownOpen.value = false;
+};
+
+const toggleGrade = (option) => {
+  if (option.value === '') {
+    filters.value.grade = [];
+  } else {
+    const idx = filters.value.grade.indexOf(option.value);
+    if (idx >= 0) {
+      filters.value.grade.splice(idx, 1);
+    } else {
+      filters.value.grade.push(option.value);
+    }
+  }
+  gradeSearch.value = '';
+};
+
+const removeGrade = (g) => {
+  const idx = filters.value.grade.indexOf(g);
+  if (idx >= 0) filters.value.grade.splice(idx, 1);
 };
 
 const handleGradeBlur = () => {
@@ -402,8 +430,11 @@ const searchAdvanced = async () => {
   try {
     const params = { mode: 'advanced', page: currentPage.value };
     Object.keys(filters.value).forEach(key => {
-      if (filters.value[key]) {
-        params[key] = filters.value[key];
+      const val = filters.value[key];
+      if (Array.isArray(val)) {
+        if (val.length > 0) params[key] = val.join(',');
+      } else if (val) {
+        params[key] = val;
       }
     });
     const response = await axios.get('/api/roll-lots', { params });
@@ -423,7 +454,7 @@ const searchAdvanced = async () => {
 const resetFilters = () => {
   filters.value = {
     item_id: '',
-    grade: '',
+    grade: [],
     papertype: '',
     gramature: '',
     width: '',
@@ -662,6 +693,18 @@ onMounted(() => {
 
 /* ─── Searchable Select ─── */
 .searchable-select { position: relative; }
+.grade-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+.grade-tag {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;
+  border-radius: 0.375rem; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 500;
+}
+.grade-tag-remove {
+  background: none; border: none; color: #059669; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 0; margin-left: 0.15rem;
+}
+.grade-tag-remove:hover { color: #dc2626; }
+.grade-check { color: #059669; font-weight: 700; margin-right: 0.15rem; }
 .dropdown-list {
   position: absolute;
   top: calc(100% + 2px);

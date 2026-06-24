@@ -1,11 +1,7 @@
 """Database and path configuration for roll_lot_viewer worker."""
 
-# --- Database ---
-DB_HOST = "127.0.0.1"
-DB_PORT = 3306
-DB_USER = "roll_lot"
-DB_PASSWORD = "rolllot2026"
-DB_NAME = "roll_lot_viewer"
+# --- Database (SQLite) ---
+DB_PATH = "/root/projects/roll_lot_viewer/database/database.sqlite"
 
 # --- Paths ---
 UPLOAD_DIR = "/var/www/sd-projects/roll_lot_viewer/storage/app/uploads"

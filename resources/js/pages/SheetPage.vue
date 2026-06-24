@@ -152,14 +152,14 @@
           v-if="sheets.length > 0"
           @click="exportData"
           class="btn btn-sm btn-outline"
-          aria-label="Download results as CSV"
+          aria-label="Download data"
         >
           <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download CSV
+          Download Data
         </button>
       </div>
 
@@ -201,7 +201,7 @@
             <td class="cell-muted">{{ sheet.content_pallet ?? '-' }}</td>
             <td class="col-action">
               <button @click="showDetail(sheet)" class="btn btn-icon-only" title="View details" aria-label="View details">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>

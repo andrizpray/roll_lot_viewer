@@ -26,17 +26,17 @@ def _set_job_status(table, job_id, status, error=None):
     """Update a job's status (and optional error message) atomically."""
     conn = get_connection()
     try:
-        with conn.cursor() as cur:
-            if error is not None:
-                cur.execute(
-                    f"UPDATE {table} SET status = %s, error_message = %s WHERE id = %s",
-                    (status, str(error), job_id),
-                )
-            else:
-                cur.execute(
-                    f"UPDATE {table} SET status = %s WHERE id = %s",
-                    (status, job_id),
-                )
+        cur = conn.cursor()
+        if error is not None:
+            cur.execute(
+                f"UPDATE {table} SET status = ?, error_message = ? WHERE id = ?",
+                (status, str(error), job_id),
+            )
+        else:
+            cur.execute(
+                f"UPDATE {table} SET status = ? WHERE id = ?",
+                (status, job_id),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -92,11 +92,11 @@ def process_export_job(job):
         filename = os.path.basename(filepath)
         conn = get_connection()
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE export_jobs SET status = 'completed', filename = %s WHERE id = %s",
-                    (filename, job_id),
-                )
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE export_jobs SET status = 'completed', filename = ? WHERE id = ?",
+                (filename, job_id),
+            )
             conn.commit()
         finally:
             conn.close()
