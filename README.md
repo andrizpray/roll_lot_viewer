@@ -6,196 +6,202 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 - **Mutasi Roll (PM1/PM2):** Data roll/lot harian dari `PeriodBalanceRoll.xlsx`
 - **Mutasi Stock Sheet:** Data stock sheet harian (format kolom berbeda, auto-detect)
 
-> **Live:** https://roll-lot.driz.web.id/
+> **Live:** https://lot-view.drizdev.space/
 
 ## Tech Stack
-- **Backend:** Laravel 13 (PHP 8.3+)
-- **Frontend:** Vue 3 (Composition API) + PrimeVue + Vite
-- **Database:** MySQL 8.0 / SQLite (dev)
-- **Queue:** Database (Laravel default)
+- **Backend:** Laravel 11 (PHP 8.3+)
+- **Frontend:** Vue 3 (Composition API) + Vite
+- **Database:** SQLite
+- **Worker:** Python 3 (background import/export via systemd)
+- **Server:** Nginx + PHP-FPM (Docker)
+- **Proxy:** 9Router (AI proxy)
+
+## Architecture
+
+```
+Browser → Nginx (Docker) → PHP-FPM (Docker) → SQLite
+                         → Python Worker (systemd) → SQLite
+```
+
+- **SQLite** — zero-config, no container needed, file-based
+- **Python worker** — polls `import_jobs` / `export_jobs` tables, processes async
+- **No queue dependency** — worker replaces Laravel queue for import/export
 
 ## Quick Start
 
 ### 1. Clone & Install
 ```bash
 git clone git@github.com:andrizpray/roll_lot_viewer.git
-cd roll-lot-viewer
+cd roll_lot_viewer
 composer install
 cp .env.example .env
 php artisan key:generate
 ```
 
-### 2. Database Setup
+### 2. Database Setup (SQLite)
 ```bash
-# MySQL (production)
-mysql -u root -p -e "
-  CREATE DATABASE roll_lot_viewer CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-  CREATE USER 'roll_lot'@'localhost' IDENTIFIED BY 'roll_lot';
-  GRANT ALL PRIVILEGES ON roll_lot_viewer.* TO 'roll_lot'@'localhost';
-  FLUSH PRIVILEGES;
-"
+# Create SQLite database
+touch database/database.sqlite
 
-# Atau SQLite (development)
-# Biarkan DB_CONNECTION=sqlite di .env
+# Update .env
+DB_CONNECTION=sqlite
+DB_DATABASE=/var/www/sd-projects/roll_lot_viewer/database/database.sqlite
+
+# Migrate
+php artisan migrate
 ```
 
-### 3. Migrate & Build
+### 3. Build Frontend
 ```bash
-php artisan migrate
 npm install && npm run build
 ```
 
 ### 4. Import Data
 ```bash
-# Via CLI (Roll)
-php artisan import:excel /path/to/PeriodBalanceRoll.xlsx
-
 # Via Web UI
 php artisan serve
 # Buka http://localhost:8000 → Upload page → drag & drop file
+
 # Tipe (Roll / Sheet) terdeteksi otomatis dari header kolom
 ```
 
-### 5. Start Server
+### 5. Start Services
 ```bash
+# Laravel
 php artisan serve --host=0.0.0.0 --port=8000
-# Buka http://localhost:8000
+
+# Python Worker (systemd)
+sudo systemctl start roll-lot-worker
 ```
 
 ## Fitur
 
 ### Import
-- Upload Excel via Web UI (drag & drop) atau CLI (`import:excel`)
-- **Auto-detect tipe file** — deteksi dari header kolom (Roll atau Sheet), user tidak perlu pilih manual
+- Upload Excel via Web UI (drag & drop)
+- **Auto-detect tipe file** — deteksi dari header kolom (Roll atau Sheet)
 - **Mutasi Roll** — Parsing kolom Description → Papertype, Gramature, Playbond, Width
-- **Mutasi Stock Sheet** — Parsing Description → Gramature & Dimension (Content Pack & Content Pallet)
+- **Mutasi Stock Sheet** — Parsing Description → Gramature & Dimension
 - Snapshot history setiap kali re-import roll (data lama aman di `roll_lot_histories`)
-- Sheet data bersifat **append** (tidak replace), sesuai laporan harian
+- Sheet data bersifat **append** (tidak replace)
 - Error logging per baris yang gagal diparse
 
 ### Tampilan Data
 
 **Data Roll** (`/`)
 - Tabel: LotID, ItemID, Weight, RewID, Papertype, Gramature, Width, Grade, Diameter
-- Mode Batch: Paste banyak LotID sekaligus (comma, newline, semicolon)
-- Mode Advanced: Filter per ItemID, Grade, Papertype, Gramature, Width, Date range, LotID
+- **Mode Batch:** Paste banyak LotID sekaligus (comma, newline, semicolon)
+- **Mode Advanced:** Filter per ItemID, Grade (multi-select), Papertype, Gramature, Width, Date range, LotID
 
 **Data Sheet** (`/sheets`)
 - Tabel: LotID, ItemID, Weight, Papertype, Gramature, Dimension, Content Pack, Content Pallet
-- Mode Batch: Paste banyak LotID
-- Mode Advanced: Filter per ItemID, Papertype, Gramature, Dimension, Date range, LotID
+- Mode Batch & Advanced filter
 
 ### Export
 - Download hasil filter sebagai **XLSX** (Microsoft Excel)
 - **Roll export:** LotID, ItemID, Weight, PaperType, Gramature, Plybond, Width, RewID, Grade, Comment, Diameter
 - **Sheet export:** LotID, ItemID, Weight, PaperType, Gramature, Dimension, Content Pack, Content Pallet
-- Export mengikuti filter saat ini (batch atau advanced)
-- Via Web UI atau API endpoint (`?resource=roll|sheet`)
+- Export async via Python worker
 
 ### UX
-- Loading skeleton shimmer (8 baris)
+- Loading skeleton shimmer
 - Empty state dengan CTA ke halaman upload
-- Modal detail per row (klik ikon mata)
+- Modal detail per row (klik ikon mata 👁)
+- Multi-select grade filter dengan tags
 - Notifikasi LotID tidak ditemukan
-- Badge tipe (Roll biru / Sheet ungu) di history import
-- Font Fira Sans, primary color `#1E40AF`
 
 ## API Endpoints
 
 | Method | URL | Description |
 |--------|-----|-------------|
 | POST | `/api/imports` | Upload Excel file (auto-detect type) |
-| GET | `/api/imports` | List import history (paginated) |
+| GET | `/api/imports` | List import history |
 | GET | `/api/imports/{id}` | Import batch detail + errors |
-| GET | `/api/imports/{id}/status` | Polling status |
-| GET | `/api/roll-lots?mode=batch&lot_ids=...` | Batch search LotID (Roll) |
-| GET | `/api/roll-lots?mode=advanced&papertype=...` | Advanced filter (Roll) |
+| GET | `/api/roll-lots?mode=batch&lot_ids=...` | Batch search (Roll) |
+| GET | `/api/roll-lots?mode=advanced&grade=1,2` | Advanced filter multi-grade (Roll) |
+| GET | `/api/roll-lots/distinct-values` | Filter dropdown values |
 | GET | `/api/roll-lots/{id}` | Single roll lot detail |
-| GET | `/api/sheets?mode=batch&lot_ids=...` | Batch search LotID (Sheet) |
-| GET | `/api/sheets?mode=advanced&dimension=...` | Advanced filter (Sheet) |
+| GET | `/api/sheets?mode=batch&lot_ids=...` | Batch search (Sheet) |
+| GET | `/api/sheets?mode=advanced&...` | Advanced filter (Sheet) |
+| GET | `/api/sheets/distinct-values` | Filter dropdown values |
 | GET | `/api/sheets/{id}` | Single sheet detail |
-| GET | `/api/export?resource=roll&mode=...` | XLSX export (roll) |
-| GET | `/api/export?resource=sheet&mode=...` | XLSX export (sheet) |
-
-## Artisan Commands
-
-```bash
-php artisan import:excel /path/to/file.xlsx   # Import file (async via queue, auto-detect type)
-php artisan import:status                      # Lihat history import
-php artisan import:status 31                   # Detail batch + errors
-```
+| GET | `/api/export?resource=roll` | Create export job (Roll) |
+| GET | `/api/export?resource=sheet` | Create export job (Sheet) |
+| GET | `/api/export/{id}/status` | Poll export status |
+| GET | `/api/export/{id}/download` | Download exported XLSX |
+| GET | `/api/dashboard` | Dashboard summary stats |
 
 ## Struktur Database
 
 | Tabel | Fungsi |
 |-------|--------|
-| `roll_lots` | Data mutasi roll aktif (ditampilkan, replace tiap import) |
-| `roll_lot_histories` | Snapshot roll sebelum replace (+ `archived_at`) |
-| `paper_sheets` | Data mutasi stock sheet (append tiap import) |
+| `roll_lots` | Data mutasi roll aktif |
+| `roll_lot_histories` | Snapshot roll sebelum replace |
+| `paper_sheets` | Data mutasi stock sheet |
 | `import_batches` | Log setiap import (status, counters, type) |
+| `import_jobs` | Async import jobs (processed by Python worker) |
+| `export_jobs` | Async export jobs (processed by Python worker) |
 | `import_errors` | Baris gagal import beserta reason |
 
 ## Deployment
 
-### Requirements
-- PHP 8.3+
-- MySQL 8.0 / MariaDB 10.5+
-- Node.js 18+ (untuk build asset)
-- Composer 2.x
-- Nginx + PHP-FPM (production)
+### Docker Stack
+- **lemp-nginx** — Nginx Alpine
+- **lemp-php** — PHP-FPM with OPcache
+- **lemp-9router** — AI proxy
 
-### Steps
-1. Clone repo ke server
-2. `composer install --no-dev --optimize-autoloader`
-3. Setup MySQL database & user
-4. Copy `.env.example` → `.env`, isi konfigurasi
-5. `php artisan key:generate`
-6. `php artisan migrate --force`
-7. `npm install && npm run build`
-8. Set document root ke `public/`
-9. Setup Nginx rewrite ke `index.php`
-10. Jalankan queue worker untuk async import
+### Systemd Services
+- `roll-lot-worker.service` — Python background worker
 
-### Nginx Config
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    root /path/to/roll-lot-viewer/public;
-    
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    
-    index index.php;
-    
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-    
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-    
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-}
-```
-
-### SSL (Let's Encrypt)
+### Setup
 ```bash
-sudo certbot --nginx -d your-domain.com
+# Clone repo
+git clone git@github.com:andrizpray/roll_lot_viewer.git
+
+# Install PHP deps
+cd roll_lot_viewer && composer install --no-dev
+
+# Build frontend
+npm install && npm run build
+
+# Setup SQLite
+touch database/database.sqlite
+php artisan migrate
+
+# Start worker
+sudo systemctl enable --now roll-lot-worker
 ```
 
-### Queue Worker
+### Post-Deploy (Auto)
 ```bash
-php artisan queue:work --daemon
+# OPcache + Laravel cache + benchmark
+/mnt/sdcard-data/dev-web/setup.sh
 ```
 
-## Testing
+## Python Worker
+
+Background worker yang menggantikan Laravel queue:
+
 ```bash
-php artisan test
-# 23 tests, 88 assertions — unit (DescriptionParser) + integration (API)
+# Location
+/root/projects/roll_lot_viewer/python/main.py
+
+# Service
+sudo systemctl status roll-lot-worker
+
+# Logs
+journalctl -u roll-lot-worker -f
 ```
+
+Worker poll setiap 5 detik:
+- `import_jobs` (status=pending) → proses Excel import
+- `export_jobs` (status=pending) → generate XLSX export
+
+## Performance
+
+Dengan optimasi:
+- **PHP OPcache** (128MB, JIT 64MB)
+- **Laravel cache** (config, route, view, event)
+- **SQLite WAL mode** + busy_timeout
+- **Nginx gzip** + static asset cache (30d)
+
+Response time: **~90ms** per endpoint (sebelumnya ~800ms)
