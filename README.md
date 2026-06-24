@@ -13,6 +13,110 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 - **Worker:** Python 3 (background import/export via systemd)
 - **Server:** Nginx + PHP-FPM (Docker)
 
+## Architecture
+
+```mermaid
+graph TB
+    Browser["🌐 Browser"]
+    
+    subgraph Docker
+        Nginx["Nginx"]
+        PHP["PHP-FPM + Laravel"]
+    end
+    
+    Worker["🐍 Python Worker"]
+    SQLite["🗄️ SQLite"]
+    
+    Browser -->|"HTTP"| Nginx
+    Nginx -->|"FastCGI"| PHP
+    PHP -->|"Read/Write"| SQLite
+    Worker -->|"Read/Write"| SQLite
+```
+
+## Workflow
+
+### Import Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Web UI
+    participant API as Laravel API
+    participant DB as SQLite
+    participant Worker as Python Worker
+
+    User->>UI: Upload Excel (drag & drop)
+    UI->>API: POST /api/imports
+    API->>DB: Insert import_jobs (status=pending)
+    API-->>UI: Job ID returned
+    UI-->>User: "Import started"
+    
+    loop Every 5 seconds
+        Worker->>DB: Poll pending jobs
+    end
+    
+    Worker->>DB: Read import_jobs
+    Worker->>Worker: Parse Excel (auto-detect type)
+    Worker->>DB: Insert roll_lots / paper_sheets
+    Worker->>DB: Update status=completed
+    Worker->>DB: Log errors to import_errors
+    
+    UI->>API: GET /api/imports/{id}/status
+    API-->>UI: Status: completed
+    UI-->>User: "Import done ✅"
+```
+
+### Export Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Web UI
+    participant API as Laravel API
+    participant DB as SQLite
+    participant Worker as Python Worker
+
+    User->>UI: Click "Download Data"
+    UI->>API: GET /api/export?resource=roll
+    API->>DB: Insert export_jobs (status=pending)
+    API-->>UI: Job ID
+    UI->>UI: Poll /api/export/{id}/status
+    
+    Worker->>DB: Poll pending export jobs
+    Worker->>DB: Query with filters
+    Worker->>Worker: Generate XLSX
+    Worker->>DB: Update status=completed, filename
+    
+    UI->>API: GET /api/export/{id}/download
+    API-->>UI: XLSX file
+    UI-->>User: Download starts
+```
+
+### Search & Filter Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Vue 3 Frontend
+    participant API as Laravel API
+    participant DB as SQLite
+
+    Note over UI: Load page
+    UI->>API: GET /api/roll-lots/distinct-values
+    API->>DB: SELECT DISTINCT grade, papertype, gramature...
+    API-->>UI: Dropdown options
+    
+    Note over User: Select filters
+    User->>UI: Grade: 1,2 + Papertype: B Kraft
+    UI->>API: GET /api/roll-lots?mode=advanced&grade=1,2&papertype=B%20Kraft
+    API->>DB: WHERE grade IN (1,2) AND papertype LIKE '%B Kraft%'
+    API-->>UI: Filtered results (paginated)
+    UI-->>User: Display table
+    
+    User->>UI: Click eye icon 👁
+    UI-->>User: Modal detail
+```
+
 ## Quick Start
 
 ### 1. Clone & Install
