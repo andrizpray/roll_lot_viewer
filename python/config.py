@@ -4,7 +4,7 @@
 DB_PATH = "/root/projects/roll_lot_viewer/database/database.sqlite"
 
 # --- Paths ---
-UPLOAD_DIR = "/var/www/sd-projects/roll_lot_viewer/storage/app/uploads"
+UPLOAD_DIR = "/root/projects/roll_lot_viewer/storage/app/private/imports"
 EXPORT_DIR = "/root/projects/roll_lot_viewer/storage/app/public"
 
 # --- Limits ---

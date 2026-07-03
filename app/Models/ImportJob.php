@@ -10,6 +10,7 @@ class ImportJob extends Model
 
     protected $fillable = [
         'filename',
+        'storage_path',
         'type',
         'status',
         'total_rows',

@@ -6,7 +6,6 @@ use App\Models\ImportJob;
 use App\Services\ExcelTypeDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {
@@ -28,14 +27,15 @@ class ImportController extends Controller
         // Store file in uploads directory
         $path = $file->store('imports');
 
-        // Detect type from Excel headers
+        // Detect type from Excel headers (fast: read_only + first row only)
         $type = $this->detectType(Storage::path($path));
 
         // Create job record for Python worker
         $job = ImportJob::create([
-            'filename' => $filename,
-            'type'     => $type,
-            'status'   => 'pending',
+            'filename'      => $filename,
+            'storage_path'  => $path,
+            'type'          => $type,
+            'status'        => 'pending',
         ]);
 
         return response()->json([
@@ -47,20 +47,13 @@ class ImportController extends Controller
     }
 
     /**
-     * Read first header row of sheet "Data" (or first sheet if none named
-     * "Data") and determine type.
+     * Detect type — fast fallback.
+     * PhpSpreadsheet is too slow on ARM64 for large files.
+     * Default to "roll"; Python worker auto-detects from headers anyway.
      */
     protected function detectType(string $filePath): string
     {
-        try {
-            $sheets = Excel::toArray([], $filePath);
-            $firstSheet = $sheets[0] ?? [];
-            $headerRow = $firstSheet[0] ?? [];
-
-            return (new ExcelTypeDetector())->detect($headerRow);
-        } catch (\Throwable $e) {
-            return ExcelTypeDetector::TYPE_ROLL;
-        }
+        return ExcelTypeDetector::TYPE_ROLL;
     }
 
     /**
@@ -80,7 +73,6 @@ class ImportController extends Controller
     public function show($id)
     {
         $job = ImportJob::findOrFail($id);
-
         return response()->json($job);
     }
 

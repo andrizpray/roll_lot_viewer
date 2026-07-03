@@ -1,5 +1,4 @@
 """Export roll lots or paper sheets from the database into an Excel file."""
-
 import json
 import os
 import sys
@@ -12,13 +11,34 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from db import execute_query
 from config import EXPORT_DIR, MAX_EXPORT_ROWS
 
+# Column configs per mode
+ROLL_HEADERS = [
+    "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
+    "Play Bond", "Width", "Rew ID", "Grade", "Comments",
+    "Diameter", "Thickness", "Description", "Date", "Time",
+]
+ROLL_COLUMNS = [
+    "lot_id", "item_id", "weight", "papertype", "gramature",
+    "playbond", "width", "rew_id", "grade", "comments",
+    "diameter", "thickness", "description_raw", "source_tr_date", "source_tr_time",
+]
+
+SHEET_HEADERS = [
+    "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
+    "Dimension", "Content Pack", "Description", "Date", "Time",
+]
+SHEET_COLUMNS = [
+    "lot_id", "item_id", "weight", "papertype", "gramature",
+    "dimension", "content_pack", "description_raw", "source_tr_date", "source_tr_time",
+]
+
 
 def export_roll_lots(job_id, filters=None, mode="roll"):
     """Export roll lots or paper sheets to an Excel file."""
     filters = filters or {}
-
-    # Determine table based on mode
     table = "paper_sheets" if mode == "sheet" else "roll_lots"
+    headers = SHEET_HEADERS if mode == "sheet" else ROLL_HEADERS
+    db_columns = SHEET_COLUMNS if mode == "sheet" else ROLL_COLUMNS
 
     # Build query dynamically from filters
     where_clauses = []
@@ -28,7 +48,7 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
         where_clauses.append("item_id = ?")
         params.append(filters["item_id"])
 
-    if filters.get("grade"):
+    if mode == "roll" and filters.get("grade"):
         where_clauses.append("grade = ?")
         params.append(filters["grade"])
 
@@ -40,9 +60,13 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
         where_clauses.append("gramature LIKE ?")
         params.append(f"%{filters['gramature']}%")
 
-    if filters.get("width"):
+    if mode == "roll" and filters.get("width"):
         where_clauses.append("width LIKE ?")
         params.append(f"%{filters['width']}%")
+
+    if mode == "sheet" and filters.get("dimension"):
+        where_clauses.append("dimension LIKE ?")
+        params.append(f"%{filters['dimension']}%")
 
     if filters.get("lot_id"):
         where_clauses.append("lot_id LIKE ?")
@@ -79,13 +103,6 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     ws = wb.active
     ws.title = "Roll Lots" if mode == "roll" else "Paper Sheets"
 
-    # Headers matching the actual DB columns
-    headers = [
-        "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
-        "Play Bond", "Width", "Rew ID", "Grade", "Comments",
-        "Diameter", "Thickness", "Description", "Date", "Time",
-    ]
-
     # Style headers
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="059669", end_color="059669", fill_type="solid")
@@ -97,12 +114,6 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
         cell.alignment = Alignment(horizontal="center")
 
     # Data rows
-    db_columns = [
-        "lot_id", "item_id", "weight", "papertype", "gramature",
-        "playbond", "width", "rew_id", "grade", "comments",
-        "diameter", "thickness", "description_raw", "source_tr_date", "source_tr_time",
-    ]
-
     for row_idx, row in enumerate(rows, 2):
         for col_idx, col_name in enumerate(db_columns, 1):
             ws.cell(row=row_idx, column=col_idx, value=row.get(col_name))
@@ -123,5 +134,5 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     wb.save(filepath)
     wb.close()
 
-    print(f"[export] job {job_id}: wrote {len(rows)} rows to {filepath}")
+    print(f"[export] job {job_id}: wrote {len(rows)} rows ({mode}) to {filepath}")
     return filepath
