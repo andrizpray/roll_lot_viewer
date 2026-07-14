@@ -11,7 +11,8 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 - **Frontend:** Vue 3 (Composition API) + Vite + PrimeVue
 - **Database:** SQLite (WAL mode)
 - **Worker:** Python 3 + openpyxl (background import/export via systemd)
-- **Server:** Nginx + PHP-FPM
+- **Server:** Nginx reverse proxy + artisan serve (port 8080)
+- **Tunnel:** Cloudflare Tunnel (public access)
 
 ## Architecture
 
@@ -20,9 +21,11 @@ Browser (Vue SPA)
    │  HTTP/JSON + X-API-Key header
    ▼
 Laravel API ──► SQLite ◄── Python Worker (polling setiap 5 detik)
-   - upload file          - import_jobs → roll_lots/paper_sheets
-   - buat job record      - export_jobs → file .xlsx
-   - query & filter data  - snapshot history + error logging
+   │                         │
+   ├─ Upload file            ├─ import_jobs → roll_lots/paper_sheets
+   ├─ Create job record      ├─ export_jobs → file .xlsx
+   ├─ Query & filter data    ├─ snapshot history + error logging
+   └─ Health check (/health) └─ Heartbeat file monitoring
 ```
 
 ## Workflow
@@ -79,6 +82,7 @@ php artisan serve --host=0.0.0.0 --port=8000
 
 # Python Worker
 cd python && python3 main.py
+
 # atau via systemd:
 sudo systemctl start roll-lot-worker
 ```
@@ -86,7 +90,7 @@ sudo systemctl start roll-lot-worker
 ## Autentikasi API
 
 Semua endpoint API dilindungi oleh API key. Kirim key via:
-- Header: `X-API-Key: <key>`
+- Header: `X-API-Key: ***`
 - Query param: `?api_key=<key>`
 
 Di environment `local`/`testing` tanpa `API_KEY` dikonfigurasi, auth dilewati otomatis.
@@ -112,12 +116,19 @@ Di environment `local`/`testing` tanpa `API_KEY` dikonfigurasi, auth dilewati ot
 - Tabel: LotID, ItemID, Weight, Papertype, Gramature, Dimension, Content Pack, Content Pallet
 - Mode Batch & Advanced filter
 
+**Dashboard** (`/dashboard`)
+- Summary statistics: total lots, total weight, breakdown per grade
+- Charts: weight distribution, daily trend
+- Color-coded weight ranges
+
 ### Export
 - Download hasil filter sebagai **XLSX**
 - Support multi-grade filter (comma-separated)
 - Export async via Python worker
 
 ### UX
+- **Dark theme** dengan emerald accent
+- **Responsive sidebar** navigation
 - Loading skeleton shimmer
 - Modal detail per row (ikon mata)
 - Multi-select grade filter dengan tags
@@ -129,6 +140,7 @@ Semua endpoint memerlukan `X-API-Key` header (kecuali di local env).
 
 | Method | URL | Description |
 |--------|-----|-------------|
+| GET | `/health` | Health check endpoint |
 | GET | `/api/dashboard` | Dashboard summary |
 | POST | `/api/imports` | Upload Excel file |
 | GET | `/api/imports` | List import jobs |
@@ -187,6 +199,16 @@ Worker poll setiap 5 detik:
 
 Config: `python/config.py`
 
+## UI Components
+
+- **AppNavbar** — Top navigation bar dengan branding
+- **AppSidebar** — Side navigation dengan menu items
+- **DefaultLayout** — Layout wrapper dengan navbar + sidebar
+- **DashboardPage** — Dashboard dengan charts dan statistics
+- **HomePage** — Roll lots data table dengan filter
+- **SheetPage** — Paper sheets data table dengan filter
+- **UploadPage** — File upload dengan drag & drop
+
 ## Performance
 
 - **SQLite WAL mode** + busy_timeout (5s)
@@ -195,9 +217,20 @@ Config: `python/config.py`
 - **Nginx gzip** + static asset cache
 - **Batch import** dengan progress tracking
 
-## Deployment
+## Systemd Services
 
-Deploy files ada di `deploy/`:
-- `deploy.sh` — script deploy utama
-- `roll-lot-worker.service` — systemd unit untuk Python worker
-- Nginx config untuk reverse proxy
+```bash
+# Services yang berjalan
+sudo systemctl status roll-lot-viewer   # Laravel (artisan serve)
+sudo systemctl status roll-lot-worker   # Python worker
+sudo systemctl status cloudflared       # Cloudflare tunnel
+sudo systemctl status nginx             # Reverse proxy
+```
+
+## Live Demo
+
+Aplikasi berjalan di: https://lot-viewer.driz.web.id
+
+## License
+
+Internal use only.
