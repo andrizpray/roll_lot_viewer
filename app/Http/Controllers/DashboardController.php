@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ImportBatch;
+use App\Models\ImportJob;
 use App\Models\PaperSheet;
 use App\Models\RollLot;
 use Illuminate\Http\JsonResponse;
@@ -22,16 +22,16 @@ class DashboardController extends Controller
         $sheetTotal = PaperSheet::count();
         $sheetTotalWeight = (float) PaperSheet::sum('weight');
 
-        // Import batch stats
-        $importTotal = ImportBatch::count();
-        $importSuccess = ImportBatch::where('status', 'success')->count();
-        $importFailed = ImportBatch::where('status', 'failed')->count();
+        // Import job stats (Python worker writes to import_jobs)
+        $importTotal = ImportJob::count();
+        $importSuccess = ImportJob::where('status', 'completed')->count();
+        $importFailed = ImportJob::where('status', 'failed')->count();
 
         // Imports today
-        $importsToday = ImportBatch::whereDate('created_at', today())->count();
+        $importsToday = ImportJob::whereDate('created_at', today())->count();
 
         // Recent imports (last 10)
-        $recentImports = ImportBatch::orderByDesc('created_at')
+        $recentImports = ImportJob::orderByDesc('created_at')
             ->limit(10)
             ->get(['id', 'filename', 'type', 'status', 'total_rows', 'success_count', 'failed_count', 'created_at']);
 

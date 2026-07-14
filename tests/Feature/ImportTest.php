@@ -2,10 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\ImportBatch;
+use App\Models\ImportJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -16,7 +15,6 @@ class ImportTest extends TestCase
     public function test_upload_excel_file_creates_import_batch_and_dispatches_job(): void
     {
         Storage::fake('local');
-        Queue::fake();
 
         $file = UploadedFile::fake()->create('test.xlsx', 1024, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
@@ -27,15 +25,15 @@ class ImportTest extends TestCase
         $response->assertStatus(202);
         $response->assertJsonStructure([
             'message',
-            'batch_id',
+            'job_id',
+            'filename',
+            'type',
         ]);
 
-        $batch = ImportBatch::first();
-        $this->assertNotNull($batch);
-        $this->assertEquals('processing', $batch->status);
-        $this->assertEquals('test.xlsx', $batch->filename);
-
-        Queue::assertPushed(\App\Jobs\ProcessExcelImport::class);
+        $job = ImportJob::first();
+        $this->assertNotNull($job);
+        $this->assertEquals('pending', $job->status);
+        $this->assertEquals('test.xlsx', $job->filename);
     }
 
     public function test_upload_rejects_non_excel_files(): void
@@ -52,14 +50,11 @@ class ImportTest extends TestCase
 
     public function test_list_import_batches_with_pagination(): void
     {
-        // Create 25 import batches manually
-        for ($i = 0; $i < 25; $i++) {
-            ImportBatch::create([
-                'filename' => 'test_' . $i . '.xlsx',
-                'total_rows' => rand(100, 1000),
-                'success_count' => rand(80, 900),
-                'failed_count' => rand(0, 100),
-                'status' => 'success',
+        // Create 25 import jobs
+        for ($i = 1; $i <= 25; $i++) {
+            ImportJob::create([
+                'filename' => "test{$i}.xlsx",
+                'status' => 'completed',
             ]);
         }
 
@@ -76,33 +71,33 @@ class ImportTest extends TestCase
 
     public function test_get_single_import_batch_details(): void
     {
-        $batch = ImportBatch::create(['filename' => 'test.xlsx', 'status' => 'success', 'total_rows' => 100, 'success_count' => 95, 'failed_count' => 5]);
+        $job = ImportJob::create(['filename' => 'test.xlsx', 'status' => 'completed', 'total_rows' => 100, 'success_count' => 95, 'failed_count' => 5]);
 
-        $response = $this->getJson("/api/imports/{$batch->id}");
+        $response = $this->getJson("/api/imports/{$job->id}");
 
         $response->assertStatus(200);
         $response->assertJson([
-            'id' => $batch->id,
-            'filename' => $batch->filename,
+            'id' => $job->id,
+            'filename' => $job->filename,
         ]);
     }
 
     public function test_get_batch_status(): void
     {
-        $batch = ImportBatch::create([
+        $job = ImportJob::create([
             'filename' => 'test.xlsx',
-            'status' => 'success',
+            'status' => 'completed',
             'total_rows' => 100,
             'success_count' => 95,
             'failed_count' => 5,
         ]);
 
-        $response = $this->getJson("/api/imports/{$batch->id}/status");
+        $response = $this->getJson("/api/imports/{$job->id}/status");
 
         $response->assertStatus(200);
         $response->assertJson([
-            'id' => $batch->id,
-            'status' => 'success',
+            'id' => $job->id,
+            'status' => 'completed',
             'total_rows' => 100,
             'success_count' => 95,
             'failed_count' => 5,

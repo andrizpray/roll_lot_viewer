@@ -1,7 +1,7 @@
 <template>
-  <div class="upload-page">
-    <div class="header">
-      <h2>
+  <div class="upload-page fade-in">
+    <div class="page-header">
+      <h2 class="page-title">
         <svg class="page-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/>
@@ -33,7 +33,42 @@
       </button>
     </div>
 
-    <div class="upload-section">
+    <!-- Template Downloads Section -->
+    <div class="card card-pad template-section">
+      <h3 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Download Template Excel
+      </h3>
+      <p class="template-desc">
+        Download template Excel untuk memudahkan upload data. Template sudah dilengkapi dengan format kolom yang benar dan contoh data.
+      </p>
+      <div class="template-buttons">
+        <button @click="downloadTemplate('roll')" class="btn btn-outline">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Template Roll Lot
+        </button>
+        <button @click="downloadTemplate('sheet')" class="btn btn-outline">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Template Paper Sheet
+        </button>
+      </div>
+    </div>
+
+    <div class="card card-pad upload-section">
       <div
         class="dropzone"
         :class="{
@@ -128,7 +163,7 @@
     </div>
 
     <!-- Import History -->
-    <div class="history-section">
+    <div class="card card-pad history-section">
       <h3>
         <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -137,7 +172,7 @@
         Import History
       </h3>
       <div class="table-wrapper">
-      <table class="history-table">
+      <table class="data-table">
         <thead>
           <tr>
             <th>File</th>
@@ -227,6 +262,32 @@ function clearUpload() {
   uploadStatus.value = '';
   uploadResult.value = null;
 }
+
+const downloadTemplate = async (type) => {
+  try {
+    const endpoint = type === 'roll' ? '/api/templates/roll-lot' : '/api/templates/sheet';
+    const filename = type === 'roll' ? 'Template_Roll_Lot.xlsx' : 'Template_Paper_Sheet.xlsx';
+    
+    const response = await axios.get(endpoint, {
+      responseType: 'blob',
+    });
+    
+    // Create a temporary URL for the blob
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    showNotification('success', 'Template downloaded', `File ${filename} berhasil didownload`);
+  } catch (error) {
+    console.error('Failed to download template:', error);
+    showNotification('failed', 'Download gagal', 'Gagal mendownload template file');
+  }
+};
 
 const loadHistory = async () => {
   try {
@@ -348,26 +409,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ─── Page ─── */
 .upload-page { padding: 0; }
-.header { margin-bottom: 1.5rem; }
-.header h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-.page-icon { width: 1.75rem; height: 1.75rem; color: #059669; }
+.upload-section { margin-bottom: 1.5rem; }
 
-/* ─── Notification Banner ─── */
+/* Notification banner */
 .notification {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.875rem 1.25rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   margin-bottom: 1rem;
   border: 1px solid;
   animation: slideDown 0.25s ease;
@@ -381,209 +432,142 @@ onMounted(() => {
   color: inherit; opacity: 0.6; border-radius: 0.25rem; flex-shrink: 0;
 }
 .notif-close:hover { opacity: 1; }
-.notif-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
-.notif-failed { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-.notif-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.notif-success { background: var(--success-bg); border-color: #bbf7d0; color: #166534; }
+.notif-failed, .notif-error { background: var(--danger-bg); border-color: #fecaca; color: #991b1b; }
 
-/* ─── Upload Section ─── */
-.upload-section {
-  background: white;
-  padding: 2rem;
-  border-radius: 0.75rem;
-  margin-bottom: 2rem;
-  border: 1px solid #e2e8f0;
+/* Template Section */
+.template-section {
+  margin-bottom: 1.5rem;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 0.5rem 0;
+}
+.section-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--primary);
+}
+.template-desc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+.template-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--primary);
+}
+.btn-outline:hover {
+  background: var(--primary);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.2);
 }
 
-/* ─── Dropzone ─── */
+/* Dropzone */
 .dropzone {
   border: 2px dashed #d1d5db;
-  border-radius: 1rem;
+  border-radius: var(--radius-xl);
   padding: 3rem 2rem;
   text-align: center;
   transition: all 0.3s ease;
   cursor: pointer;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
-.dropzone:hover:not(.dropzone-disabled) {
-  border-color: #059669;
-  background: #ecfdf5;
-}
+.dropzone:hover:not(.dropzone-disabled) { border-color: var(--primary); background: var(--primary-light); }
 .dropzone-active {
-  border-color: #059669 !important;
-  background: #ecfdf5 !important;
-  transform: scale(1.02);
-  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.15);
+  border-color: var(--primary) !important;
+  background: var(--primary-light) !important;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.15);
 }
-.dropzone-disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.dropzone-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-.dropzone-svg {
-  width: 4rem;
-  height: 4rem;
-  color: #94a3b8;
-  transition: all 0.3s ease;
-}
-.dropzone-active .dropzone-svg { color: #059669; transform: translateY(-4px); }
-.dropzone-text { font-size: 1.1rem; font-weight: 600; color: #475569; margin: 0; }
-.dropzone-hint { font-size: 0.85rem; color: #94a3b8; margin: 0 0 0.5rem 0; }
+.dropzone-disabled { opacity: 0.6; cursor: not-allowed; }
+.dropzone-content { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+.dropzone-svg { width: 3.5rem; height: 3.5rem; color: var(--text-muted); transition: all 0.3s ease; }
+.dropzone-active .dropzone-svg { color: var(--primary); transform: translateY(-4px); }
+.dropzone-text { font-size: 1.1rem; font-weight: 600; color: var(--text-heading); margin: 0; }
+.dropzone-hint { font-size: 0.85rem; color: var(--text-muted); margin: 0 0 0.5rem 0; }
 
-/* ─── Buttons ─── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s ease;
-  font-size: 0.95rem;
-}
-.btn-primary { background: #059669; color: white; }
-.btn-primary:hover { background: #047857; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3); }
-.btn-loading { background: #047857; cursor: wait; }
-.btn-outline {
-  background: transparent;
-  color: #059669;
-  border: 1.5px solid #059669;
-}
-.btn-outline:hover { background: #ecfdf5; }
-.btn-sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
-.btn-icon { width: 1.2rem; height: 1.2rem; }
+.btn-loading { background: var(--primary-dark); cursor: wait; }
 .inline-icon { width: 1rem; height: 1rem; margin-right: 0.3rem; vertical-align: middle; }
 
-/* ─── Spinner ─── */
+/* Spinner icons */
 .spin-icon { width: 1.2rem; height: 1.2rem; animation: spin 1s linear infinite; }
 .spin-icon-sm { width: 1rem; height: 1rem; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.done-icon { width: 1rem; height: 1rem; color: var(--success); }
+.fail-icon { width: 1rem; height: 1rem; color: var(--danger); }
 
-.done-icon { width: 1rem; height: 1rem; color: #16a34a; }
-.fail-icon { width: 1rem; height: 1rem; color: #dc2626; }
-
-/* ─── Progress ─── */
+/* Progress */
 .progress-section {
   margin-top: 1.5rem;
   padding: 1.25rem;
-  background: #f8fafc;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
 }
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
+.progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
 .progress-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  font-size: 0.9rem; font-weight: 500; color: var(--text-body);
+  display: flex; align-items: center; gap: 0.4rem;
 }
-.progress-pct { font-size: 0.85rem; font-weight: 700; color: #059669; }
-.pct-done { color: #16a34a; }
-.pct-fail { color: #dc2626; }
-.progress-track {
-  height: 0.625rem;
-  background: #e2e8f0;
-  border-radius: 999px;
-  overflow: hidden;
-}
+.progress-pct { font-size: 0.85rem; font-weight: 700; color: var(--primary); }
+.pct-done { color: var(--success); }
+.pct-fail { color: var(--danger); }
+.progress-track { height: 0.625rem; background: var(--border-color); border-radius: 999px; overflow: hidden; }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #059669, #10b981);
+  background: linear-gradient(90deg, var(--primary), #10b981);
   border-radius: 999px;
   transition: width 0.5s ease;
 }
 .progress-done { background: linear-gradient(90deg, #16a34a, #22c55e); }
 .progress-fail { background: linear-gradient(90deg, #ef4444, #f87171); }
 .progress-indeterminate {
-  background: linear-gradient(90deg, #059669, #34d399, #059669);
+  background: linear-gradient(90deg, var(--primary), #34d399, var(--primary));
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-/* ─── Result Details ─── */
+/* Result details */
 .result-details {
   display: flex;
   gap: 1.5rem;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
 }
 .result-stat { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
-.stat-label { font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: 600; letter-spacing: 0.04em; }
-.stat-val { font-size: 1.3rem; font-weight: 700; color: #1e293b; }
-.result-stat.ok .stat-val { color: #16a34a; }
-.result-stat.fail .stat-val { color: #dc2626; }
+.stat-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.04em; }
+.stat-val { font-size: 1.3rem; font-weight: 700; color: var(--text-heading); }
+.result-stat.ok .stat-val { color: var(--success); }
+.result-stat.fail .stat-val { color: var(--danger); }
 
-/* ─── History Section ─── */
-.history-section {
-  background: white;
-  padding: 1.5rem 2rem;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-}
+/* History */
 .history-section h3 {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-heading);
   margin-bottom: 1.25rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
-.table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 0.5rem; border: 1px solid #f1f5f9; }
-.history-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 700px; }
-.history-table thead { position: sticky; top: 0; z-index: 10; }
-.history-table th {
-  padding: 0.875rem 1rem;
-  text-align: left;
-  font-weight: 600;
-  color: #475569;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-.history-table td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
-.history-table tbody tr:nth-child(even) { background: #f8fafc; }
-.history-table tbody tr:hover { background: #ecfdf5; }
-.history-table tbody tr:last-child td { border-bottom: none; }
-.col-action { width: 80px; text-align: center; }
-.filename { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.cell-ok { color: #16a34a; font-weight: 600; }
-.cell-fail { color: #dc2626; font-weight: 600; }
-.cell-date { color: #64748b; white-space: nowrap; font-size: 0.85rem; }
-
-/* ─── Badges / Pills ─── */
-.status-pill, .type-pill {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-.pill-success { background: #dcfce7; color: #166534; }
-.pill-failed { background: #fee2e2; color: #991b1b; }
-.pill-pending, .pill-processing { background: #fef3c7; color: #92400e; }
-.type-pill-roll { background: #e0f2fe; color: #075985; }
-.type-pill-sheet { background: #fae8ff; color: #86198f; }
-
-/* ─── Focus ─── */
-.btn:focus-visible { outline: 2px solid #059669; outline-offset: 2px; }
+.history-section .inline-icon { color: var(--primary); }
+.data-table { min-width: 700px; }
+.filename { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.cell-ok { color: var(--success); font-weight: 600; }
+.cell-fail { color: var(--danger); font-weight: 600; }
+.cell-date { color: var(--text-body); white-space: nowrap; font-size: 0.85rem; }
 </style>

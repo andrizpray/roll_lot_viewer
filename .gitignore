@@ -41,3 +41,10 @@ composer.phar
 public/test.txt
 docs/superpowers/
 *.xlsx
+
+# Migration & internal files
+.env.postgres.patch
+.env.sqlite.backup
+MIGRATION_COMPLETE.md
+migrate_sqlite_to_postgres.py
+deploy-package/

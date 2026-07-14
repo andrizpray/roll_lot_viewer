@@ -28,7 +28,7 @@ class RollLot extends Model
 
     protected $casts = [
         'weight' => 'decimal:2',
-        'diameter' => 'decimal:2',
+        'diameter' => 'string',
         'source_tr_date' => 'date',
         'source_tr_time' => 'datetime',
     ];
@@ -49,7 +49,7 @@ class RollLot extends Model
             $query->where('item_id', $filters['item_id']);
         }
         if (!empty($filters['papertype'])) {
-            $query->where('papertype', 'like', '%' . $filters['papertype'] . '%');
+            $query->where('papertype', 'like', '%' . addslashes($filters['papertype']) . '%');
         }
         if (!empty($filters['grade'])) {
             $query->where('grade', $filters['grade']);

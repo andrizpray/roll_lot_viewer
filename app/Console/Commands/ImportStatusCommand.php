@@ -2,46 +2,50 @@
 
 namespace App\Console\Commands;
 
-use App\Models\ImportBatch;
+use App\Models\ImportError;
+use App\Models\ImportJob;
 use Illuminate\Console\Command;
 
 class ImportStatusCommand extends Command
 {
     protected $signature = 'import:status 
-                            {id? : Import batch ID (default: show all recent)}';
+                            {id? : Import job ID (default: show all recent)}';
 
-    protected $description = 'Cek status import batch';
+    protected $description = 'Cek status import job';
 
     public function handle(): int
     {
         $id = $this->argument('id');
 
         if ($id) {
-            $batch = ImportBatch::with('errors')->find($id);
+            $job = ImportJob::find($id);
 
-            if (!$batch) {
-                $this->error("Batch ID $id tidak ditemukan.");
+            if (!$job) {
+                $this->error("Job ID $id tidak ditemukan.");
                 return Command::FAILURE;
             }
 
-            $this->info("Batch #{$batch->id}: {$batch->filename}");
+            $this->info("Job #{$job->id}: {$job->filename}");
             $this->table(
-                ['Status', 'Total Rows', 'Success', 'Failed', 'Date'],
+                ['Type', 'Status', 'Total Rows', 'Success', 'Failed', 'Date'],
                 [[
-                    $batch->status,
-                    $batch->total_rows,
-                    $batch->success_count,
-                    $batch->failed_count,
-                    $batch->created_at->format('Y-m-d H:i'),
+                    $job->type,
+                    $job->status,
+                    $job->total_rows,
+                    $job->success_count,
+                    $job->failed_count,
+                    $job->created_at->format('Y-m-d H:i'),
                 ]]
             );
 
-            if ($batch->errors->isNotEmpty()) {
+            // Show errors if any
+            $errors = ImportError::where('import_batch_id', $id)->get();
+            if ($errors->isNotEmpty()) {
                 $this->newLine();
                 $this->warn('Errors:');
                 $this->table(
                     ['Row', 'LotID', 'Reason'],
-                    $batch->errors->map(fn($e) => [
+                    $errors->map(fn($e) => [
                         $e->row_number,
                         $e->lot_id ?? '-',
                         $e->reason,
@@ -52,25 +56,26 @@ class ImportStatusCommand extends Command
             return Command::SUCCESS;
         }
 
-        // Show recent batches
-        $batches = ImportBatch::orderBy('created_at', 'desc')->limit(10)->get();
+        // Show recent jobs
+        $jobs = ImportJob::orderBy('created_at', 'desc')->limit(10)->get();
 
-        if ($batches->isEmpty()) {
-            $this->info('Belum ada import batch.');
+        if ($jobs->isEmpty()) {
+            $this->info('Belum ada import job.');
             return Command::SUCCESS;
         }
 
-        $this->info('Recent import batches:');
+        $this->info('Recent import jobs:');
         $this->table(
-            ['ID', 'Filename', 'Status', 'Total', 'Success', 'Failed', 'Date'],
-            $batches->map(fn($b) => [
-                $b->id,
-                $b->filename,
-                $b->status,
-                $b->total_rows,
-                $b->success_count,
-                $b->failed_count,
-                $b->created_at->format('Y-m-d H:i'),
+            ['ID', 'Filename', 'Type', 'Status', 'Total', 'Success', 'Failed', 'Date'],
+            $jobs->map(fn($j) => [
+                $j->id,
+                $j->filename,
+                $j->type,
+                $j->status,
+                $j->total_rows,
+                $j->success_count,
+                $j->failed_count,
+                $j->created_at->format('Y-m-d H:i'),
             ])->toArray()
         );
 

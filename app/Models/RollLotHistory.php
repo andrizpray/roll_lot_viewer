@@ -31,7 +31,7 @@ class RollLotHistory extends Model
 
     protected $casts = [
         'weight' => 'decimal:2',
-        'diameter' => 'decimal:2',
+        'diameter' => 'string',
         'source_tr_date' => 'date',
         'source_tr_time' => 'datetime',
         'archived_at' => 'datetime',

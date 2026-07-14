@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'api_key' => \App\Http\Middleware\VerifyApiKey::class,
+        ]);
+
         $middleware->api(prepend: [
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':60,1',
         ]);

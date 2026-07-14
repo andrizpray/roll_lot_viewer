@@ -25,42 +25,53 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     params = []
 
     if filters.get("item_id"):
-        where_clauses.append("item_id = ?")
+        where_clauses.append("item_id = %s")
         params.append(filters["item_id"])
 
     if filters.get("grade"):
-        where_clauses.append("grade = ?")
-        params.append(filters["grade"])
+        # Support comma-separated multi-grade (e.g. "1,2,3")
+        grades = filters["grade"]
+        if isinstance(grades, str):
+            grades = [g.strip() for g in grades.split(",") if g.strip()]
+        elif not isinstance(grades, list):
+            grades = [str(grades)]
+        if len(grades) == 1:
+            where_clauses.append("grade = %s")
+            params.append(grades[0])
+        elif grades:
+            placeholders = ", ".join(["%s"] * len(grades))
+            where_clauses.append(f"grade IN ({placeholders})")
+            params.extend(grades)
 
     if filters.get("papertype"):
-        where_clauses.append("papertype LIKE ?")
+        where_clauses.append("papertype LIKE %s")
         params.append(f"%{filters['papertype']}%")
 
     if filters.get("gramature"):
-        where_clauses.append("gramature LIKE ?")
+        where_clauses.append("gramature LIKE %s")
         params.append(f"%{filters['gramature']}%")
 
     if filters.get("width"):
-        where_clauses.append("width LIKE ?")
+        where_clauses.append("width LIKE %s")
         params.append(f"%{filters['width']}%")
 
     if filters.get("lot_id"):
-        where_clauses.append("lot_id LIKE ?")
+        where_clauses.append("lot_id LIKE %s")
         params.append(f"%{filters['lot_id']}%")
 
     if filters.get("date_from"):
-        where_clauses.append("source_tr_date >= ?")
+        where_clauses.append("source_tr_date >= %s")
         params.append(filters["date_from"])
 
     if filters.get("date_to"):
-        where_clauses.append("source_tr_date <= ?")
+        where_clauses.append("source_tr_date <= %s")
         params.append(filters["date_to"])
 
     # Batch mode: specific lot_ids
     if filters.get("lot_ids"):
         lot_ids = filters["lot_ids"]
         if lot_ids:
-            placeholders = ", ".join(["?"] * len(lot_ids))
+            placeholders = ", ".join(["%s"] * len(lot_ids))
             where_clauses.append(f"lot_id IN ({placeholders})")
             params.extend(lot_ids)
 

@@ -23,17 +23,38 @@ class ImportController extends Controller
         ]);
 
         $file = $request->file('file');
-        $filename = $file->getClientOriginalName();
+        $originalName = $file->getClientOriginalName();
 
-        // Store file in uploads directory
-        $path = $file->store('imports');
+        // Generate a unique storage name to avoid collisions
+        $storageName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+
+        // Store file in storage/app/uploads/ — this is where the Python worker looks
+        $uploadsDir = storage_path('app/uploads');
+        if (!is_dir($uploadsDir)) {
+            mkdir($uploadsDir, 0775, true);
+        }
+        $file->move($uploadsDir, $storageName);
+
+        $fullPath = $uploadsDir . '/' . $storageName;
+
+        // Validate content: ensure the file has recognized Excel columns
+        $validation = $this->validateExcelContent($fullPath);
+        if (!$validation['valid']) {
+            // Clean up the uploaded file
+            @unlink($fullPath);
+            return response()->json([
+                'error'   => 'File tidak dikenali sebagai data mutasi yang valid.',
+                'details' => $validation['reason'],
+            ], 422);
+        }
 
         // Detect type from Excel headers
-        $type = $this->detectType(Storage::path($path));
+        $type = $validation['type'];
 
         // Create job record for Python worker
+        // filename = storageName so worker can find the file in UPLOAD_DIR
         $job = ImportJob::create([
-            'filename' => $filename,
+            'filename' => $storageName,
             'type'     => $type,
             'status'   => 'pending',
         ]);
@@ -41,25 +62,53 @@ class ImportController extends Controller
         return response()->json([
             'message'  => 'File uploaded successfully. Waiting for worker to process.',
             'job_id'   => $job->id,
-            'filename' => $filename,
+            'filename' => $originalName,
             'type'     => $type,
         ], 202);
     }
 
     /**
-     * Read first header row of sheet "Data" (or first sheet if none named
-     * "Data") and determine type.
+     * Validate Excel content by checking headers for recognized columns.
+     * Returns ['valid' => bool, 'type' => string, 'reason' => string|null]
      */
-    protected function detectType(string $filePath): string
+    protected function validateExcelContent(string $filePath): array
     {
+        // Known column headers that the Python worker can process
+        $recognizedHeaders = [
+            'lot id', 'item id', 'weight', 'paper type', 'gramature',
+            'play bond', 'width', 'rew id', 'grade', 'comments',
+            'diameter', 'thickness', 'description', 'date', 'time',
+            'qty_pack', 'qty_pallet', 'keterangan',
+        ];
+
         try {
             $sheets = Excel::toArray([], $filePath);
             $firstSheet = $sheets[0] ?? [];
             $headerRow = $firstSheet[0] ?? [];
 
-            return (new ExcelTypeDetector())->detect($headerRow);
+            if (empty($headerRow)) {
+                return ['valid' => false, 'type' => null, 'reason' => 'File kosong atau tidak memiliki header row.'];
+            }
+
+            // Count how many recognized columns are present
+            $normalized = array_map(fn($v) => is_string($v) ? strtolower(trim($v)) : '', $headerRow);
+            $matched = array_intersect($normalized, $recognizedHeaders);
+
+            if (count($matched) < 3) {
+                return [
+                    'valid'  => false,
+                    'type'   => null,
+                    'reason' => 'Header kolom tidak dikenali. Minimal 3 kolom standar diperlukan (Lot ID, Item ID, Weight, dll). '
+                              . 'Ditemukan: ' . implode(', ', array_filter($headerRow)),
+                ];
+            }
+
+            // Detect type
+            $type = (new ExcelTypeDetector())->detect($headerRow);
+
+            return ['valid' => true, 'type' => $type, 'reason' => null];
         } catch (\Throwable $e) {
-            return ExcelTypeDetector::TYPE_ROLL;
+            return ['valid' => false, 'type' => null, 'reason' => 'Gagal membaca file Excel: ' . $e->getMessage()];
         }
     }
 
@@ -100,5 +149,33 @@ class ImportController extends Controller
             'success_count' => $job->success_count,
             'failed_count'  => $job->failed_count,
         ]);
+    }
+
+    /**
+     * Download Roll Lot template Excel file.
+     */
+    public function downloadRollTemplate()
+    {
+        $filepath = storage_path('app/templates/template_roll_lot.xlsx');
+        
+        if (!file_exists($filepath)) {
+            return response()->json(['error' => 'Template file not found'], 404);
+        }
+
+        return response()->download($filepath, 'Template_Roll_Lot.xlsx');
+    }
+
+    /**
+     * Download Paper Sheet template Excel file.
+     */
+    public function downloadSheetTemplate()
+    {
+        $filepath = storage_path('app/templates/template_paper_sheet.xlsx');
+        
+        if (!file_exists($filepath)) {
+            return response()->json(['error' => 'Template file not found'], 404);
+        }
+
+        return response()->download($filepath, 'Template_Paper_Sheet.xlsx');
     }
 }

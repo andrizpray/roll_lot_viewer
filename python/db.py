@@ -1,40 +1,42 @@
-"""SQLite connection helper."""
+"""PostgreSQL connection helper."""
 
-import sqlite3
-from config import DB_PATH
+import psycopg2
+import psycopg2.extras
+import os
+
+# PostgreSQL connection config
+DB_CONFIG = {
+    'dbname': 'roll_lot_viewer',
+    'user': 'roll_lot_user',
+    'password': 'roll_lot_secure_2026',
+    'host': '127.0.0.1',
+    'port': 5432
+}
 
 
 class DictRow:
-    """Makes sqlite3 Row behave like a dict with [] access."""
+    """Makes psycopg2 result behave like a dict with [] access."""
 
-    def __init__(self, row, columns):
-        self._row = row
-        self._columns = columns
+    def __init__(self, row_dict):
+        self._dict = row_dict
 
     def __getitem__(self, key):
-        if isinstance(key, int):
-            return self._row[key]
-        idx = self._columns.index(key)
-        return self._row[idx]
+        return self._dict[key]
 
     def get(self, key, default=None):
-        try:
-            return self[key]
-        except (ValueError, IndexError):
-            return default
+        return self._dict.get(key, default)
 
     def __contains__(self, key):
-        return key in self._columns
+        return key in self._dict
 
     def keys(self):
-        return self._columns
+        return self._dict.keys()
 
 
 def get_connection():
-    """Return a new SQLite connection with row_factory for dict-like access."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+    """Return a new PostgreSQL connection."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    conn.autocommit = False  # Use transactions
     return conn
 
 
@@ -42,11 +44,10 @@ def execute_query(sql, params=None):
     """Execute a query and return results as list of dict-like objects."""
     conn = get_connection()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(sql, params or ())
-        columns = [desc[0] for desc in cur.description] if cur.description else []
         rows = cur.fetchall()
-        return [DictRow(row, columns) for row in rows]
+        return [DictRow(dict(row)) for row in rows]
     finally:
         conn.close()
 
