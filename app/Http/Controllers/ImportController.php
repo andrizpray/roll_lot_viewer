@@ -6,7 +6,6 @@ use App\Models\ImportJob;
 use App\Services\ExcelTypeDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {
@@ -129,7 +128,6 @@ class ImportController extends Controller
     public function show($id)
     {
         $job = ImportJob::findOrFail($id);
-
         return response()->json($job);
     }
 

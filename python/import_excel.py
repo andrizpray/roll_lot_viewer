@@ -1,5 +1,4 @@
 """Import roll lots or paper sheets from an Excel file into the database."""
-
 import os
 import sys
 import datetime
@@ -8,7 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import openpyxl
 from db import execute_query, execute_many, get_connection
-from config import IMPORT_BATCH_SIZE
+from config import IMPORT_BATCH_SIZE, UPLOAD_DIR
 
 
 # Column mapping: Excel header → DB column
@@ -218,17 +217,25 @@ def import_roll_lots(job_id, filepath):
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"Import file not found: {filepath}")
 
-    # Determine target table from import_jobs.type
+    # Determine target table and file path from import_jobs
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute("SELECT type FROM import_jobs WHERE id = %s", (job_id,))
         result = cur.fetchone()
         job_type = result[0] if result else "roll"
+        stored_path = result[1] if result else None
     finally:
         conn.close()
 
-    table = "paper_sheets" if job_type == "sheet" else "roll_lots"
+    # Resolve actual file path
+    if stored_path and os.path.isfile(stored_path):
+        filepath = stored_path
+    elif stored_path:
+        # storage_path is relative hash — join with UPLOAD_DIR
+        candidate = os.path.join(UPLOAD_DIR, stored_path)
+        if os.path.isfile(candidate):
+            filepath = candidate
 
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     ws = wb.active
@@ -238,7 +245,27 @@ def import_roll_lots(job_id, filepath):
     # Read headers from first row
     headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
 
-    # Map headers to DB columns
+    # Auto-detect type from headers if PHP got it wrong
+    detected = detect_type_from_headers(headers)
+    if detected != job_type:
+        print(f"[import] job {job_type} -> detected '{detected}' from headers, overriding")
+        job_type = detected
+        # Update DB
+        conn2 = get_connection()
+        try:
+            conn2.execute("UPDATE import_jobs SET type = ? WHERE id = ?", (job_type, job_id))
+            conn2.commit()
+        finally:
+            conn2.close()
+
+    table = "paper_sheets" if job_type == "sheet" else "roll_lots"
+    column_map = SHEET_COLUMN_MAP if job_type == "sheet" else ROLL_COLUMN_MAP
+
+    # Handle sheet mode with positional indexing (duplicate headers)
+    if job_type == "sheet":
+        return _import_sheet_rows(job_id, filepath, wb, ws, headers)
+
+    # Roll mode: map headers to DB columns
     db_columns = []
     header_to_col = {}
     for h in headers:
