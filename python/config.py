@@ -7,9 +7,9 @@ import os
 # DB_PATH no longer used (migrated from SQLite to PostgreSQL)
 
 # --- Paths ---
-UPLOAD_DIR = "/home/andriz/roll_lot_viewer/storage/app/uploads"
-EXPORT_DIR = "/home/andriz/roll_lot_viewer/storage/app/public"
-HEARTBEAT_FILE = "/home/andriz/roll_lot_viewer/storage/app/worker_heartbeat"
+UPLOAD_DIR = "/home/ubuntu/roll_lot_viewer/storage/app/uploads"
+EXPORT_DIR = "/home/ubuntu/roll_lot_viewer/storage/app/public"
+HEARTBEAT_FILE = "/home/ubuntu/roll_lot_viewer/storage/app/worker_heartbeat"
 
 # --- Limits ---
 MAX_EXPORT_ROWS = 10_000

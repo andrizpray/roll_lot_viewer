@@ -34,7 +34,8 @@ class ExcelTypeDetector
             return self::TYPE_ROLL;
         }
 
-        $hasSheetMarkers = in_array('qty_pack', $normalized, true)
+        $hasSheetMarkers = (in_array('qty_pack', $normalized, true)
+                || in_array('qty', $normalized, true))
             && (in_array('description', $normalized, true)
                 || in_array('keterangan', $normalized, true));
 

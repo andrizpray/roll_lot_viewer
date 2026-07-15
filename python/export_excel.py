@@ -76,7 +76,7 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
         params.append(f"%{filters['width']}%")
 
     if mode == "sheet" and filters.get("dimension"):
-        where_clauses.append("dimension LIKE ?")
+        where_clauses.append("dimension LIKE %s")
         params.append(f"%{filters['dimension']}%")
 
     if filters.get("lot_id"):

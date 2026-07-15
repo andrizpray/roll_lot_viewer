@@ -6,6 +6,7 @@ use App\Models\ImportJob;
 use App\Services\ExcelTypeDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {
@@ -74,16 +75,27 @@ class ImportController extends Controller
     {
         // Known column headers that the Python worker can process
         $recognizedHeaders = [
+            // With spaces
             'lot id', 'item id', 'weight', 'paper type', 'gramature',
             'play bond', 'width', 'rew id', 'grade', 'comments',
             'diameter', 'thickness', 'description', 'date', 'time',
-            'qty_pack', 'qty_pallet', 'keterangan',
+            'content pack', 'dimension',
+            // Without spaces (common Excel variants)
+            'lotid', 'itemid', 'papertype', 'playbond', 'rewid',
+            'qty_pack', 'qty_pallet', 'keterangan', 'endqty',
+            'trdate', 'trtime', 'datetime', 'locationid', 'qty',
+            'no', 'location',
         ];
 
         try {
-            $sheets = Excel::toArray([], $filePath);
-            $firstSheet = $sheets[0] ?? [];
-            $headerRow = $firstSheet[0] ?? [];
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
+            $firstSheet = $spreadsheet->getActiveSheet();
+            $headerRow = [];
+            foreach ($firstSheet->getRowIterator(1, 1)->current()->getCellIterator() as $cell) {
+                $headerRow[] = $cell->getValue();
+            }
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
 
             if (empty($headerRow)) {
                 return ['valid' => false, 'type' => null, 'reason' => 'File kosong atau tidak memiliki header row.'];

@@ -212,6 +212,162 @@ def parse_description_sheet(description):
     return result
 
 
+# --- Column maps for sheet/roll mode ---
+ROLL_COLUMN_MAP = COLUMN_MAP  # Same as the main COLUMN_MAP
+
+SHEET_COLUMN_MAP = {
+    "Lot ID": "lot_id",
+    "LotID": "lot_id",
+    "Item ID": "item_id",
+    "ItemID": "item_id",
+    "Weight": "weight",
+    "endqty": "weight",
+    "Qty": "qty",
+    "Paper Type": "papertype",
+    "PaperType": "papertype",
+    "Gramature": "gramature",
+    "Dimension": "dimension",
+    "Content Pack": "content_pack",
+    "Content Pallet": "content_pallet",
+    "Qty_Pack": "content_pack",
+    "Description": "description_raw",
+    "Date": "source_tr_date",
+    "TrDate": "source_tr_date",
+    "Time": "source_tr_time",
+    "TrTime": "source_tr_time",
+    "DateTime": "source_tr_date",
+    "Comments": "comments",
+    "Keterangan": "keterangan",
+    "LocationID": "location_id",
+    "No": None,
+}
+
+
+def detect_type_from_headers(headers):
+    """Auto-detect import type from Excel headers."""
+    header_set = {h.strip() for h in headers if h}
+    # Sheet-specific headers
+    if header_set & {"Dimension", "Content Pack", "Qty_Pack", "Keterangan"}:
+        return "sheet"
+    # Roll-specific headers
+    if header_set & {"Rew ID", "RewID", "Grade", "Diameter", "Width"}:
+        return "roll"
+    return "roll"  # default
+
+
+def _import_sheet_rows(job_id, filepath, wb, ws, headers):
+    """Import paper sheets using positional column mapping."""
+    col_map_list = []
+    for h in headers:
+        if h and h.strip() in SHEET_COLUMN_MAP:
+            col_map_list.append((h, SHEET_COLUMN_MAP[h.strip()]))
+        else:
+            col_map_list.append((h, None))
+
+    db_columns = [db_col for _, db_col in col_map_list if db_col]
+
+    # Add derived columns from description parsing if missing
+    derived_cols = []
+    for col in ['papertype', 'gramature', 'dimension']:
+        if col not in db_columns:
+            derived_cols.append(col)
+            db_columns.append(col)
+
+    placeholders = ", ".join(["%s"] * len(db_columns))
+    columns = ", ".join([f'"{c}"' for c in db_columns])
+    update_cols = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in db_columns])
+    insert_sql = (
+        f'INSERT INTO paper_sheets ({columns}, import_batch_id) '
+        f'VALUES ({placeholders}, %s) '
+        f'ON CONFLICT (lot_id) DO UPDATE SET {update_cols}, import_batch_id = EXCLUDED.import_batch_id'
+    )
+
+    # Build value index map: db_col -> position in values list
+    val_idx = {}
+    pos = 0
+    for _, db_col in col_map_list:
+        if db_col:
+            val_idx[db_col] = pos
+            pos += 1
+
+    total = success = failed = 0
+    errors = []
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if all(cell is None for cell in row):
+            continue
+        total += 1
+        row_number = total + 1
+        try:
+            values = []
+            for i, (h, db_col) in enumerate(col_map_list):
+                if db_col is None:
+                    continue
+                val = row[i] if i < len(row) else None
+                if isinstance(val, datetime.time):
+                    val = val.strftime("%H:%M:%S")
+                elif isinstance(val, datetime.date) and not isinstance(val, datetime.datetime):
+                    val = val.strftime("%Y-%m-%d")
+                elif isinstance(val, datetime.datetime):
+                    val = val.strftime("%Y-%m-%d %H:%M:%S")
+                elif val == "" or val == "-":
+                    val = None
+                # Cap numeric overflow (Excel cell corruption)
+                elif isinstance(val, (int, float)) and abs(val) >= 10**13:
+                    val = None
+                values.append(val)
+
+            # Cast string columns that might arrive as int from Excel
+            for col_name in ("lot_id", "item_id"):
+                if col_name in val_idx and values[val_idx[col_name]] is not None:
+                    values[val_idx[col_name]] = str(values[val_idx[col_name]])
+
+            lot_id = row[1] if len(row) > 1 and row[1] else None
+            if lot_id is not None:
+                lot_id = str(lot_id)
+
+            # Parse description for missing fields
+            desc_idx = next((i for i, (h, dc) in enumerate(col_map_list) if dc == "description_raw"), None)
+            description_raw = row[desc_idx] if desc_idx is not None and desc_idx < len(row) else None
+
+            if description_raw:
+                parsed = parse_description_sheet(description_raw)
+                # Fill existing columns
+                for field in ("papertype", "gramature", "dimension"):
+                    if field in val_idx and not values[val_idx[field]]:
+                        values[val_idx[field]] = parsed[field]
+                # Append derived columns
+                for col in derived_cols:
+                    values.append(parsed.get(col))
+            elif derived_cols:
+                for _ in derived_cols:
+                    values.append(None)
+
+            values.append(job_id)
+
+            conn = get_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(insert_sql, values)
+                conn.commit()
+            finally:
+                conn.close()
+            success += 1
+        except Exception as exc:
+            failed += 1
+            errors.append((row_number, lot_id if 'lot_id' in dir() else None, None, str(exc)))
+
+        if total % IMPORT_BATCH_SIZE == 0:
+            _update_progress(job_id, total, success, failed)
+
+    wb.close()
+    if errors:
+        _log_errors(job_id, errors)
+    _update_progress(job_id, total, success, failed, completed=True)
+    print(f"[import] sheet job {job_id}: imported {success}/{total} rows ({failed} errors)")
+    return success
+
+
 def import_roll_lots(job_id, filepath):
     """Import roll lots or paper sheets from an Excel file."""
     if not os.path.isfile(filepath):
@@ -221,7 +377,7 @@ def import_roll_lots(job_id, filepath):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT type FROM import_jobs WHERE id = %s", (job_id,))
+        cur.execute("SELECT type, filename FROM import_jobs WHERE id = %s", (job_id,))
         result = cur.fetchone()
         job_type = result[0] if result else "roll"
         stored_path = result[1] if result else None
@@ -253,7 +409,8 @@ def import_roll_lots(job_id, filepath):
         # Update DB
         conn2 = get_connection()
         try:
-            conn2.execute("UPDATE import_jobs SET type = ? WHERE id = ?", (job_type, job_id))
+            cur2 = conn2.cursor()
+            cur2.execute("UPDATE import_jobs SET type = %s WHERE id = %s", (job_type, job_id))
             conn2.commit()
         finally:
             conn2.close()
@@ -275,6 +432,15 @@ def import_roll_lots(job_id, filepath):
 
     if not db_columns:
         raise ValueError(f"No matching columns found. Excel headers: {headers}")
+
+    # If Description is present but papertype/gramature/width are missing,
+    # add them — they'll be parsed from description at row level
+    derived_cols = []
+    for col in ['papertype', 'gramature', 'playbond', 'width']:
+        if col not in db_columns:
+            derived_cols.append(col)
+            db_columns.append(col)
+    has_description = 'description_raw' in db_columns
 
     # Build INSERT SQL — use INSERT ... ON CONFLICT (upsert) for PostgreSQL
     placeholders = ", ".join(["%s"] * len(db_columns))
@@ -313,13 +479,18 @@ def import_roll_lots(job_id, filepath):
                         val = val.strftime("%Y-%m-%d")
                     elif isinstance(val, datetime.datetime):
                         val = val.strftime("%Y-%m-%d %H:%M:%S")
-                    # Convert empty strings to None for cleaner data
-                    elif val == "":
+                    # Convert empty strings and dash placeholders to None
+                    elif val == "" or val == "-":
+                        val = None
+                    # Cap numeric overflow (Excel cell corruption)
+                    elif isinstance(val, (int, float)) and abs(val) >= 10**13:
                         val = None
                     values.append(val)
 
             # Extract lot_id and description for processing
             lot_id = data.get("Lot ID") or data.get("LotID")
+            if lot_id is not None:
+                lot_id = str(lot_id)
             description_raw = data.get("Description")
             
             # Parse description to fill missing fields (different logic for Roll vs Sheet)
@@ -355,6 +526,15 @@ def import_roll_lots(job_id, filepath):
                     
                     if "width" in col_index and not values[col_index["width"]]:
                         values[col_index["width"]] = parsed['width']
+
+            # Append values for derived columns (parsed from description, not in Excel headers)
+            if derived_cols and description_raw:
+                parsed = parse_description(description_raw)
+                for col in derived_cols:
+                    values.append(parsed.get(col))
+            elif derived_cols:
+                for _ in derived_cols:
+                    values.append(None)
 
             # --- Snapshot history (only for roll_lots, not sheets) ---
             if table == "roll_lots" and lot_id:

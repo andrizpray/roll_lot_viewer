@@ -244,7 +244,7 @@ return [
         | Drivers: memory|illuminate|batch
         |
         */
-        'driver'      => 'batch', // Use batch to reduce memory for large files
+        'driver'      => 'memory', // memory avoids PG 65535 param limit
 
         /*
         |--------------------------------------------------------------------------
