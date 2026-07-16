@@ -13,24 +13,28 @@ from config import EXPORT_DIR, MAX_EXPORT_ROWS
 
 # Column configs per mode
 ROLL_HEADERS = [
-    "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
+    "No.", "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
     "Play Bond", "Width", "Rew ID", "Grade", "Comments",
     "Diameter", "Thickness", "Description", "Date", "Time",
 ]
 ROLL_COLUMNS = [
-    "lot_id", "item_id", "weight", "papertype", "gramature",
+    None, "lot_id", "item_id", "weight", "papertype", "gramature",
     "playbond", "width", "rew_id", "grade", "comments",
     "diameter", "thickness", "description_raw", "source_tr_date", "source_tr_time",
 ]
 
 SHEET_HEADERS = [
-    "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
+    "No.", "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
     "Dimension", "Content Pack", "Description", "Date", "Time",
 ]
 SHEET_COLUMNS = [
-    "lot_id", "item_id", "weight", "papertype", "gramature",
+    None, "lot_id", "item_id", "weight", "papertype", "gramature",
     "dimension", "content_pack", "description_raw", "source_tr_date", "source_tr_time",
 ]
+
+# Numeric columns that should be stored as numbers, empty if no value
+NUMERIC_COLUMNS = {"width", "grade"}
+GRADE3_FILL = PatternFill(start_color="FEF08A", end_color="FEF08A", fill_type="solid")  # yellow highlight
 
 
 def export_roll_lots(job_id, filters=None, mode="roll"):
@@ -127,7 +131,24 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     # Data rows
     for row_idx, row in enumerate(rows, 2):
         for col_idx, col_name in enumerate(db_columns, 1):
-            ws.cell(row=row_idx, column=col_idx, value=row.get(col_name))
+            if col_name is None:
+                # No. column = row number
+                ws.cell(row=row_idx, column=col_idx, value=row_idx - 1)
+                continue
+            value = row.get(col_name)
+            if col_name in NUMERIC_COLUMNS:
+                # Store as number, empty if no value
+                value = int(value) if value is not None and value != "" else None
+            ws.cell(row=row_idx, column=col_idx, value=value)
+
+        # Highlight entire row if grade == 3
+        if row.get("grade") is not None:
+            try:
+                if int(row["grade"]) == 3:
+                    for c in range(1, len(db_columns) + 1):
+                        ws.cell(row=row_idx, column=c).fill = GRADE3_FILL
+            except (ValueError, TypeError):
+                pass
 
     # Auto-fit columns
     for col in ws.columns:
