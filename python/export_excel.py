@@ -2,7 +2,7 @@
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date as dt_date, time as dt_time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -24,16 +24,16 @@ ROLL_COLUMNS = [
 ]
 
 SHEET_HEADERS = [
-    "No.", "Lot ID", "Item ID", "Weight", "Paper Type", "Gramature",
-    "Dimension", "Content Pack", "Description", "Date", "Time",
+    "No", "LotID", "ItemID", "Weight", "PaperType", "Gramature",
+    "Dimension", "ContentPack", "ContentPallet", "LocationID", "DateTime_", "Last_Modified",
 ]
 SHEET_COLUMNS = [
     None, "lot_id", "item_id", "weight", "papertype", "gramature",
-    "dimension", "content_pack", "description_raw", "source_tr_date", "source_tr_time",
+    "dimension", "content_pack", "content_pallet", "location_id", "source_tr_date", "updated_at",
 ]
 
 # Numeric columns that should be stored as numbers, empty if no value
-NUMERIC_COLUMNS = {"width", "grade"}
+NUMERIC_COLUMNS = {"width", "grade", "content_pack", "content_pallet"}
 GRADE3_FILL = PatternFill(start_color="FEF08A", end_color="FEF08A", fill_type="solid")  # yellow highlight
 
 
@@ -136,17 +136,27 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
                 ws.cell(row=row_idx, column=col_idx, value=row_idx - 1)
                 continue
             value = row.get(col_name)
+            # Combine date + time for DateTime_ column
+            if col_name == "source_tr_date" and mode == "sheet":
+                tr_date = row.get("source_tr_date")
+                tr_time = row.get("source_tr_time")
+                if tr_date and tr_time:
+                    d = tr_date if isinstance(tr_date, dt_date) else dt_date.fromisoformat(str(tr_date))
+                    t = tr_time if isinstance(tr_time, dt_time) else dt_time.fromisoformat(str(tr_time))
+                    value = datetime.combine(d, t)
+                elif tr_date:
+                    value = tr_date
             if col_name in NUMERIC_COLUMNS:
                 # Store as number, empty if no value
                 value = int(value) if value is not None and value != "" else None
             ws.cell(row=row_idx, column=col_idx, value=value)
 
-        # Highlight entire row if grade == 3
+        # Highlight grade cell if grade == 3
         if row.get("grade") is not None:
             try:
                 if int(row["grade"]) == 3:
-                    for c in range(1, len(db_columns) + 1):
-                        ws.cell(row=row_idx, column=c).fill = GRADE3_FILL
+                    grade_idx = db_columns.index("grade") + 1
+                    ws.cell(row=row_idx, column=grade_idx).fill = GRADE3_FILL
             except (ValueError, TypeError):
                 pass
 
