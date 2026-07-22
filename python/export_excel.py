@@ -68,20 +68,20 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
             params.extend(grades)
 
     if filters.get("papertype"):
-        where_clauses.append("papertype LIKE %s")
-        params.append(f"%{filters['papertype']}%")
+        where_clauses.append("papertype = %s")
+        params.append(filters["papertype"])
 
     if filters.get("gramature"):
-        where_clauses.append("gramature LIKE %s")
-        params.append(f"%{filters['gramature']}%")
+        where_clauses.append("gramature = %s")
+        params.append(filters["gramature"])
 
     if filters.get("width"):
-        where_clauses.append("width LIKE %s")
-        params.append(f"%{filters['width']}%")
+        where_clauses.append("width = %s")
+        params.append(filters["width"])
 
     if mode == "sheet" and filters.get("dimension"):
-        where_clauses.append("dimension LIKE %s")
-        params.append(f"%{filters['dimension']}%")
+        where_clauses.append("dimension ILIKE %s")
+        params.append(filters["dimension"])
 
     if filters.get("lot_id"):
         where_clauses.append("lot_id LIKE %s")
@@ -106,7 +106,10 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     sql = f"SELECT * FROM {table}"
     if where_clauses:
         sql += " WHERE " + " AND ".join(where_clauses)
-    sql += f" ORDER BY lot_id LIMIT {MAX_EXPORT_ROWS}"
+    if mode == "sheet":
+        sql += f" ORDER BY dimension, gramature LIMIT {MAX_EXPORT_ROWS}"
+    else:
+        sql += f" ORDER BY width, gramature LIMIT {MAX_EXPORT_ROWS}"
 
     rows = execute_query(sql, params if params else None)
 

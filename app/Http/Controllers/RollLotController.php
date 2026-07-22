@@ -80,7 +80,7 @@ class RollLotController extends Controller
             $query->where('item_id', $filters['item_id']);
         }
         if (!empty($filters['papertype'])) {
-            $query->where('papertype', 'like', '%' . $filters['papertype'] . '%');
+            $query->where('papertype', $filters['papertype']);
         }
         if (!empty($filters['grade'])) {
             $grades = is_array($filters['grade'])
@@ -98,7 +98,7 @@ class RollLotController extends Controller
             $query->whereDate('source_tr_date', '<=', $filters['date_to']);
         }
         if (!empty($filters['gramature'])) {
-            $query->where('gramature', 'like', '%' . $filters['gramature'] . '%');
+            $query->where('gramature', $filters['gramature']);
         }
         if (!empty($filters['width'])) {
             $query->where('width', $filters['width']);
@@ -160,8 +160,10 @@ class RollLotController extends Controller
         $widths = RollLot::query()
             ->whereNotNull('width')
             ->where('width', '!=', '')
+            ->select('width')
+            ->selectRaw('CAST(width AS INTEGER) AS width_num')
             ->distinct()
-            ->orderBy('width')
+            ->orderBy('width_num')
             ->pluck('width');
 
         return response()->json([

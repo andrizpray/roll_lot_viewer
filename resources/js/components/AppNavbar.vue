@@ -13,6 +13,7 @@
         <svg class="crumb-sep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <polyline points="9 18 15 12 9 6" />
         </svg>
+        <i class="crumb-icon" :class="icon"></i>
         <span class="crumb-current">{{ title }}</span>
       </div>
     </div>
@@ -31,6 +32,7 @@
 <script setup>
 defineProps({
   title: { type: String, default: 'Dashboard' },
+  icon: { type: String, default: 'pi pi-th-large' },
 });
 defineEmits(['toggle-sidebar']);
 </script>
@@ -64,6 +66,7 @@ defineEmits(['toggle-sidebar']);
 .breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
 .crumb-root { color: var(--text-muted); }
 .crumb-sep { color: var(--text-muted); }
+.crumb-icon { color: var(--primary); font-size: 0.95rem; }
 .crumb-current { color: var(--text-heading); font-weight: 600; }
 
 .navbar-right { display: flex; align-items: center; gap: 0.75rem; }

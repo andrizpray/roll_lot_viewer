@@ -8,7 +8,7 @@
       @navigate="onNavigate"
     />
     <div class="layout-main">
-      <AppNavbar :title="currentTitle" @toggle-sidebar="toggleSidebar" />
+      <AppNavbar :title="currentTitle" :icon="currentIcon" @toggle-sidebar="toggleSidebar" />
       <main class="layout-content">
         <div class="content-container">
           <slot />
@@ -30,6 +30,7 @@ const mobileOpen = ref(false);
 const isMobile = ref(false);
 
 const currentTitle = computed(() => route.meta?.title || 'Dashboard');
+const currentIcon = computed(() => route.meta?.icon || 'pi pi-th-large');
 
 function checkViewport() {
   isMobile.value = window.innerWidth <= 1024;

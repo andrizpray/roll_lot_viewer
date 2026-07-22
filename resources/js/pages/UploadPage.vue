@@ -199,7 +199,7 @@
             <td>{{ batch.total_rows ?? '-' }}</td>
             <td class="cell-ok">{{ batch.success_count ?? '-' }}</td>
             <td class="cell-fail">{{ batch.failed_count ?? '-' }}</td>
-            <td class="cell-date">{{ batch.created_at }}</td>
+            <td class="cell-date">{{ formatDate(batch.created_at) }}</td>
             <td class="col-action">
               <button @click="viewDetails(batch)" class="btn btn-sm btn-outline">Details</button>
             </td>
@@ -403,6 +403,14 @@ const viewDetails = async (batch) => {
   }
 };
 
+function formatDate(val) {
+  if (!val) return '-';
+  return new Date(val).toLocaleString('id-ID', {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 onMounted(() => {
   loadHistory();
 });
@@ -569,5 +577,5 @@ onMounted(() => {
 .filename { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .cell-ok { color: var(--success); font-weight: 600; }
 .cell-fail { color: var(--danger); font-weight: 600; }
-.cell-date { color: var(--text-body); white-space: nowrap; font-size: 0.85rem; }
+.cell-date { color: var(--text-body); white-space: nowrap; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 </style>

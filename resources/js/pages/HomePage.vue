@@ -474,8 +474,11 @@ const exportData = async () => {
       params.lot_ids = detectedLotIds.value.join(',');
     } else {
       Object.keys(filters.value).forEach(key => {
-        if (filters.value[key]) {
-          params[key] = filters.value[key];
+        const val = filters.value[key];
+        if (Array.isArray(val)) {
+          if (val.length > 0) params[key] = val.join(',');
+        } else if (val) {
+          params[key] = val;
         }
       });
     }

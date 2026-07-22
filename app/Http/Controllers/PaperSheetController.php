@@ -76,13 +76,15 @@ class PaperSheetController extends Controller
             $query->where('item_id', $filters['item_id']);
         }
         if (!empty($filters['papertype'])) {
-            $query->where('papertype', 'like', '%' . $filters['papertype'] . '%');
+            $query->where('papertype', $filters['papertype']);
         }
         if (!empty($filters['gramature'])) {
-            $query->where('gramature', 'like', '%' . $filters['gramature'] . '%');
+            $query->where('gramature', $filters['gramature']);
         }
         if (!empty($filters['dimension'])) {
-            $query->where('dimension', 'like', '%' . $filters['dimension'] . '%');
+            // ponytail: ilike (no wildcards) = case-insensitive exact match;
+            // DB stores mixed-case dimensions (1000x600 / 1000X600).
+            $query->where('dimension', 'ilike', $filters['dimension']);
         }
         if (!empty($filters['date_from'])) {
             $query->whereDate('source_tr_date', '>=', $filters['date_from']);

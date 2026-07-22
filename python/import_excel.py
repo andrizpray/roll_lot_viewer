@@ -361,6 +361,7 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
             _update_progress(job_id, total, success, failed)
 
     wb.close()
+    _delete_stale("paper_sheets", job_id)
     if errors:
         _log_errors(job_id, errors)
     _update_progress(job_id, total, success, failed, completed=True)
@@ -566,6 +567,9 @@ def import_roll_lots(job_id, filepath):
 
     wb.close()
 
+    # Full-sync: delete roll lots not present in this upload
+    _delete_stale(table, job_id)
+
     # Log errors to import_errors table
     if errors:
         _log_errors(job_id, errors)
@@ -576,6 +580,28 @@ def import_roll_lots(job_id, filepath):
     print(f"[import] job {job_id}: imported {success}/{total} rows "
           f"({failed} errors) from {filepath}")
     return success
+
+
+def _delete_stale(table, job_id):
+    """Full-sync: delete rows not present in the current import.
+
+    Upsert sets import_batch_id = job_id for every row in the file (inserted or
+    updated). Rows absent from the file keep their old import_batch_id, so
+    `IS DISTINCT FROM %s` catches exactly the stale ones (NULL-safe).
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f'DELETE FROM {table} WHERE import_batch_id IS DISTINCT FROM %s',
+            (job_id,),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    print(f"[import] job {job_id}: deleted {deleted} stale rows from {table}")
+    return deleted
 
 
 def _snapshot_existing(lot_id, job_id):
