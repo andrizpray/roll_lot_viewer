@@ -7,12 +7,15 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 - **Mutasi Stock Sheet:** Data stock sheet harian (format kolom berbeda, auto-detect)
 
 ## Tech Stack
-- **Backend:** Laravel 13 (PHP 8.3+)
-- **Frontend:** Vue 3 (Composition API) + Vite + PrimeVue
-- **Database:** SQLite (WAL mode)
-- **Worker:** Python 3 + openpyxl (background import/export via systemd)
-- **Server:** Nginx reverse proxy + artisan serve (port 8080)
-- **Tunnel:** Cloudflare Tunnel (public access)
+
+| Layer | Teknologi |
+|-------|-----------|
+| Backend | Laravel 13 (PHP 8.3+) |
+| Frontend | Vue 3 (Composition API) + Vite + PrimeVue 4 + Tailwind CSS 4 |
+| Database | PostgreSQL (Laravel & Python worker — single source of truth) |
+| Worker | Python 3 + openpyxl + psycopg2 (background import/export via polling) |
+| Auth | API Key middleware (`X-API-Key` header) |
+| Server | Nginx + Cloudflare Tunnel |
 
 ## Architecture
 
@@ -20,34 +23,35 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 Browser (Vue SPA)
    │  HTTP/JSON + X-API-Key header
    ▼
-Laravel API ──► SQLite ◄── Python Worker (polling setiap 5 detik)
+Laravel API ──► PostgreSQL ◄── Python Worker (polling 5s)
    │                         │
-   ├─ Upload file            ├─ import_jobs → roll_lots/paper_sheets
+   ├─ Upload file            ├─ import_jobs → roll_lots / paper_sheets
    ├─ Create job record      ├─ export_jobs → file .xlsx
-   ├─ Query & filter data    ├─ snapshot history + error logging
-   └─ Health check (/health) └─ Heartbeat file monitoring
+   ├─ Query & filter data    ├─ batch snapshot → roll_lot_histories
+   └─ Health check (/health) └─ error logging → import_errors
 ```
 
 ## Workflow
 
 ### Import Flow
 
-1. User upload Excel via Web UI (drag & drop)
-2. Laravel `POST /api/imports` → simpan file ke `storage/app/uploads/`, detect tipe, insert `import_jobs` (status=pending)
-3. Python worker poll `import_jobs` → parse Excel → snapshot existing data ke `roll_lot_histories` → `INSERT OR REPLACE` ke target table
-4. Error per baris dicatat ke `import_errors`
+1. User upload Excel via Web UI (drag & drop, max 20MB)
+2. Laravel `POST /api/imports` → simpan file → detect tipe dari header → insert `import_jobs` (status=pending)
+3. Python worker poll → batch parse Excel → **batch snapshot** ke `roll_lot_histories` → **batch upsert** (per 1000 row/chunk) → log errors per baris
+4. `_delete_stale()` dijalankan **hanya setelah commit berhasil** — file kosong tidak menghapus data
 5. Frontend poll status sampai completed
 
 ### Export Flow
 
 1. User klik "Download Data" dengan filter aktif
 2. Laravel `GET /api/export` → insert `export_jobs` (status=pending)
-3. Python worker poll → query data → generate XLSX → update status=completed
+3. Python worker poll → query → generate XLSX (max 10.000 baris) → update status=completed
 4. Frontend download file via `/api/export/{id}/download`
 
 ## Quick Start
 
 ### 1. Clone & Install
+
 ```bash
 git clone git@github.com:andrizpray/roll_lot_viewer.git
 cd roll_lot_viewer
@@ -57,40 +61,58 @@ php artisan key:generate
 ```
 
 ### 2. Konfigurasi `.env`
+
 ```bash
 # Wajib di production:
 API_KEY=your-random-secret-key-here
 
-# Database sudah default SQLite (tidak perlu diubah)
+# PostgreSQL (default):
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=roll_lot_viewer
+DB_USERNAME=roll_lot_user
+DB_PASSWORD=
 ```
 
 ### 3. Database Setup
+
 ```bash
-touch database/database.sqlite
+# Buat database dan user (PostgreSQL):
+createdb -U postgres roll_lot_viewer
+psql -U postgres -d roll_lot_viewer -c "CREATE USER roll_lot_user WITH PASSWORD 'your_password';"
+psql -U postgres -d roll_lot_viewer -c "GRANT ALL PRIVILEGES ON DATABASE roll_lot_viewer TO roll_lot_user;"
+psql -U postgres -d roll_lot_viewer -c "GRANT ALL ON SCHEMA public TO roll_lot_user;"
+
+# Update .env: DB_PASSWORD=your_password
+
+# Run migrations:
 php artisan migrate
 ```
 
 ### 4. Build Frontend
+
 ```bash
 npm install && npm run build
 ```
 
 ### 5. Start Services
-```bash
-# Laravel (development)
-php artisan serve --host=0.0.0.0 --port=8000
 
-# Python Worker
+```bash
+# Laravel (port 8080):
+php artisan serve --host=0.0.0.0 --port=8080
+
+# Python Worker:
 cd python && python3 main.py
 
-# atau via systemd:
-sudo systemctl start roll-lot-worker
+# atau via PM2:
+pm2 start python/main.py --name roll-lot-worker
 ```
 
 ## Autentikasi API
 
 Semua endpoint API dilindungi oleh API key. Kirim key via:
-- Header: `X-API-Key: ***`
+- Header: `X-API-Key: <key>`
 - Query param: `?api_key=<key>`
 
 Di environment `local`/`testing` tanpa `API_KEY` dikonfigurasi, auth dilewati otomatis.
@@ -98,33 +120,34 @@ Di environment `local`/`testing` tanpa `API_KEY` dikonfigurasi, auth dilewati ot
 ## Fitur
 
 ### Import
-- Upload Excel via Web UI (drag & drop)
+- Upload Excel via Web UI (drag & drop, max 20MB)
 - **Auto-detect tipe file** — deteksi dari header kolom (Roll atau Sheet)
-- **Roll:** kolom Excel sudah terpisah (Paper Type, Gramature, Width, dll)
-- **Sheet:** format kolom berbeda, auto-detect
-- **Snapshot history** — setiap re-import roll, data lama di-copy ke `roll_lot_histories`
+- **Batch upsert** — 1 koneksi per job, chunk 1000 row, satu transaksi
+- **Batch snapshot history** — 1 SELECT + 1 INSERT per job (bukan per baris)
+- **Empty file guard** — file kosong tidak menghapus data existing
 - **Error logging** — baris gagal dicatat ke `import_errors` dengan row number dan alasan
 
 ### Tampilan Data
 
-**Data Roll** (`/`)
+**Data Roll** (`/rolls`)
 - Tabel: LotID, ItemID, Weight, RewID, Papertype, Gramature, Width, Grade, Diameter
-- **Mode Batch:** Paste banyak LotID sekaligus (comma, newline, semicolon)
+- **Mode Batch:** Paste banyak LotID sekaligus (comma, newline, semicolon, tab, space), max 1000
 - **Mode Advanced:** Filter per ItemID, Grade (multi-select), Papertype, Gramature, Width, Date range
+- Color-coded grade badges
 
 **Data Sheet** (`/sheets`)
 - Tabel: LotID, ItemID, Weight, Papertype, Gramature, Dimension, Content Pack, Content Pallet
 - Mode Batch & Advanced filter
 
-**Dashboard** (`/dashboard`)
-- Summary statistics: total lots, total weight, breakdown per grade
-- Charts: weight distribution, daily trend
-- Color-coded weight ranges
+**Dashboard** (`/`)
+- Summary: total roll lots, total sheets, total imports (success/fail)
+- Bar chart: aktivitas import 7 hari terakhir
+- Recent imports list
 
 ### Export
-- Download hasil filter sebagai **XLSX**
-- Support multi-grade filter (comma-separated)
-- Export async via Python worker
+- Download hasil filter sebagai **XLSX** (max 10.000 baris)
+- Grade 3 rows di-highlight kuning
+- Async via Python worker
 
 ### UX
 - **Dark theme** dengan emerald accent
@@ -132,7 +155,7 @@ Di environment `local`/`testing` tanpa `API_KEY` dikonfigurasi, auth dilewati ot
 - Loading skeleton shimmer
 - Modal detail per row (ikon mata)
 - Multi-select grade filter dengan tags
-- Notifikasi LotID tidak ditemukan
+- Notifikasi LotID tidak ditemukan (batch mode)
 
 ## API Endpoints
 
@@ -146,6 +169,8 @@ Semua endpoint memerlukan `X-API-Key` header (kecuali di local env).
 | GET | `/api/imports` | List import jobs |
 | GET | `/api/imports/{id}` | Import job detail |
 | GET | `/api/imports/{id}/status` | Poll import status |
+| GET | `/api/imports/templates/roll` | Download Roll template |
+| GET | `/api/imports/templates/sheet` | Download Sheet template |
 | GET | `/api/roll-lots?mode=batch&lot_ids=...` | Batch search (Roll) |
 | GET | `/api/roll-lots?mode=advanced&grade=1,2` | Advanced filter (Roll) |
 | GET | `/api/roll-lots/distinct-values` | Filter dropdown values |
@@ -163,73 +188,82 @@ Semua endpoint memerlukan `X-API-Key` header (kecuali di local env).
 | Tabel | Fungsi |
 |-------|--------|
 | `roll_lots` | Data mutasi roll aktif |
-| `roll_lot_histories` | Snapshot roll sebelum re-import |
+| `roll_lot_histories` | Snapshot roll sebelum re-import (arsip) |
 | `paper_sheets` | Data mutasi stock sheet |
 | `import_jobs` | Async import jobs (diproses Python worker) |
 | `import_errors` | Baris gagal import (per row) |
 | `export_jobs` | Async export jobs (diproses Python worker) |
 
-## Artisan Commands
-
-```bash
-# Cek status import job
-php artisan import:status         # 10 terbaru
-php artisan import:status {id}    # Detail + errors
-```
-
 ## Python Worker
 
-Background worker yang menggantikan Laravel queue:
+Background worker — polling setiap 5 detik:
+
+```
+import_jobs (status=pending)
+  → parse Excel headers → detect type
+  → batch snapshot (roll_lot_histories)
+  → batch upsert (executemany, chunk 1000)
+  → _delete_stale() AFTER commit
+  → log errors per baris
+
+export_jobs (status=pending)
+  → query with filters
+  → generate XLSX (openpyxl)
+  → update status=completed
+```
+
+Config: `python/config.py`
 
 ```bash
 # Start manual
 cd python && python3 main.py
 
+# Via PM2
+pm2 start python/main.py --name roll-lot-worker
+pm2 logs roll-lot-worker
+
 # Via systemd
 sudo systemctl start roll-lot-worker
 sudo systemctl status roll-lot-worker
-
-# Logs
 journalctl -u roll-lot-worker -f
 ```
 
-Worker poll setiap 5 detik:
-- `import_jobs` (status=pending) → parse Excel → snapshot → insert → log errors
-- `export_jobs` (status=pending) → query → generate XLSX
-
-Config: `python/config.py`
-
 ## UI Components
 
-- **AppNavbar** — Top navigation bar dengan branding
-- **AppSidebar** — Side navigation dengan menu items
-- **DefaultLayout** — Layout wrapper dengan navbar + sidebar
-- **DashboardPage** — Dashboard dengan charts dan statistics
-- **HomePage** — Roll lots data table dengan filter
-- **SheetPage** — Paper sheets data table dengan filter
-- **UploadPage** — File upload dengan drag & drop
+| Component | Fungsi |
+|-----------|--------|
+| AppNavbar | Top navigation bar |
+| AppSidebar | Side navigation |
+| DefaultLayout | Layout wrapper |
+| DashboardPage | Dashboard dengan charts |
+| HomePage | Roll lots data table + filter |
+| SheetPage | Paper sheets data table + filter |
+| UploadPage | File upload dengan drag & drop |
+| DetailModal | Modal detail per roll |
+| SheetDetailModal | Modal detail per sheet |
+| ImportBatchModal | Modal history import |
 
 ## Performance
 
-- **SQLite WAL mode** + busy_timeout (5s)
+- **PostgreSQL** ( bukan SQLite — mendukung concurrent connections lebih baik)
+- **Batch executemany** — 1 koneksi per job, bukan per baris
+- **Batch snapshot** — 1 SELECT + 1 INSERT per job untuk history
 - **PHP OPcache** + JIT
 - **Laravel cache** (config, route, view)
 - **Nginx gzip** + static asset cache
-- **Batch import** dengan progress tracking
 
 ## Systemd Services
 
 ```bash
-# Services yang berjalan
-sudo systemctl status roll-lot-viewer   # Laravel (artisan serve)
+sudo systemctl status roll-lot-viewer   # Laravel
 sudo systemctl status roll-lot-worker   # Python worker
 sudo systemctl status cloudflared       # Cloudflare tunnel
-sudo systemctl status nginx             # Reverse proxy
+sudo systemctl status nginx            # Reverse proxy
 ```
 
 ## Live Demo
 
-Aplikasi berjalan di: https://lot-viewer.driz.web.id
+https://lot-viewer.driz.web.id
 
 ## License
 
