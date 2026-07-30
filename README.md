@@ -19,16 +19,51 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 
 ## Architecture
 
-```
-Browser (Vue SPA)
-   │  HTTP/JSON + X-API-Key header
-   ▼
-Laravel API ──► PostgreSQL ◄── Python Worker (polling 5s)
-   │                         │
-   ├─ Upload file            ├─ import_jobs → roll_lots / paper_sheets
-   ├─ Create job record      ├─ export_jobs → file .xlsx
-   ├─ Query & filter data    ├─ batch snapshot → roll_lot_histories
-   └─ Health check (/health) └─ error logging → import_errors
+```mermaid
+flowchart LR
+    subgraph Upload
+        U["👤 User uploads Excel\n(drag & drop, max 20MB)"]
+    end
+
+    subgraph Laravel
+        A1["POST /api/imports"]
+        A2["Detect type\n(Roll or Sheet)"]
+        A3["Create import_jobs\n(status=pending)"]
+        A4["Save file to\nstorage/app/uploads/"]
+    end
+
+    subgraph PostgreSQL
+        IJ["import_jobs"]
+        RL["roll_lots"]
+        PS["paper_sheets"]
+        RH["roll_lot_histories"]
+        IE["import_errors"]
+    end
+
+    subgraph PythonWorker
+        W1["Poll import_jobs\n(every 5s)"]
+        W2["Parse Excel\n(batch by row)"]
+        W3["Batch snapshot\n→ roll_lot_histories"]
+        W4["Batch upsert\n(executemany)"]
+        W5["COMMIT"]
+        W6["_delete_stale()\n(only after commit)"]
+        W7["Log errors\n→ import_errors"]
+        W8["Update job status\n(completed/failed)"]
+    end
+
+    U --> A1 --> A4 & A2 --> A3 --> W1
+    A4 -. file path .-> W2
+    W1 -.-> IJ
+    W2 --> W3 --> W4 --> W5 --> W6
+    W5 -.-> IJ
+    W6 -. commit .-> IJ
+    RL & PS -.-> RH
+    W7 -. errors .-> IE
+    W8 -. status .-> IJ
+    IJ -. job record .-> W8
+
+    style W5 fill:#166534,color:#fff,stroke:#166534
+    style W6 fill:#166534,color:#fff,stroke:#166534
 ```
 
 ## Workflow
