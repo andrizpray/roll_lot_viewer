@@ -19,58 +19,43 @@ Aplikasi internal untuk mengimpor, menampilkan, dan memfilter data mutasi kertas
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    subgraph Upload
-        U["👤 User uploads Excel\n(drag & drop, max 20MB)"]
-    end
-
-    subgraph Laravel
-        A1["POST /api/imports"]
-        A2["Detect type\n(Roll or Sheet)"]
-        A3["Create import_jobs\n(status=pending)"]
-        A4["Save file to\nstorage/app/uploads/"]
-    end
-
-    subgraph PostgreSQL
-        IJ["import_jobs"]
-        RL["roll_lots"]
-        PS["paper_sheets"]
-        RH["roll_lot_histories"]
-        IE["import_errors"]
-    end
-
-    subgraph PythonWorker
-        W1["Poll import_jobs\n(every 5s)"]
-        W2["Parse Excel\n(batch by row)"]
-        W3["Batch snapshot\n→ roll_lot_histories"]
-        W4["Batch upsert\n(executemany)"]
-        W5["COMMIT"]
-        W6["_delete_stale()\n(only after commit)"]
-        W7["Log errors\n→ import_errors"]
-        W8["Update job status\n(completed/failed)"]
-    end
-
-    U --> A1 --> A4 & A2 --> A3 --> W1
-    A4 -. file path .-> W2
-    W1 -.-> IJ
-    W2 --> W3 --> W4 --> W5 --> W6
-    W5 -.-> IJ
-    W6 -. commit .-> IJ
-    RL & PS -.-> RH
-    W7 -. errors .-> IE
-    W8 -. status .-> IJ
-    IJ -. job record .-> W8
-
-    style W5 fill:#166534,color:#fff,stroke:#166534
-    style W6 fill:#166534,color:#fff,stroke:#166534
+```
+User uploads Excel (drag & drop, max 20MB)
+        │
+        ▼
+Laravel: POST /api/imports
+        │
+        ├── Save file → storage/app/uploads/
+        ├── Detect type (Roll or Sheet) from headers
+        └── Create import_jobs (status=pending)
+                          │
+                          ▼
+        ┌─────────────────────────────────┐
+        │   Python Worker (polls every 5s) │
+        └─────────────────────────────────┘
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+   Parse Excel     Batch snapshot      Batch upsert
+   (row-by-row)   → roll_lot_histories  (executemany, 1000 rows/chunk)
+        │                 │                 │
+        │                 └────────┬────────┘
+        │                          │
+        │                          ▼
+        │                    COMMIT (only after all rows inserted)
+        │                          │
+        │                          ▼
+        │               _delete_stale() ← runs ONLY after commit
+        │               (prevents data loss on partial failure)
+        │                          │
+        ▼                          ▼
+  Log errors             Update import_jobs (completed/failed)
+  → import_errors
 ```
 
-## Workflow
+**Transaction safety:** `COMMIT` → `_delete_stale()` order is guaranteed. If insert fails mid-batch → `ROLLBACK`, `_delete_stale()` never runs.
 
 ### Import Flow
-
-1. User upload Excel via Web UI (drag & drop, max 20MB)
 2. Laravel `POST /api/imports` → simpan file → detect tipe dari header → insert `import_jobs` (status=pending)
 3. Python worker poll → batch parse Excel → **batch snapshot** ke `roll_lot_histories` → **batch upsert** (per 1000 row/chunk) → log errors per baris
 4. `_delete_stale()` dijalankan **hanya setelah commit berhasil** — file kosong tidak menghapus data
