@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from db import execute_query, get_connection
 from config import (
-    UPLOAD_DIR, EXPORT_DIR, HEARTBEAT_FILE,
+    UPLOAD_DIR, HEARTBEAT_FILE,
     MAX_RETRY_ATTEMPTS, RETRY_BACKOFF_BASE,
 )
 from import_excel import import_roll_lots

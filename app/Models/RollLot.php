@@ -42,25 +42,4 @@ class RollLot extends Model
     {
         return $query->whereIn('lot_id', $lotIds);
     }
-
-    public function scopeFilterAdvanced($query, array $filters)
-    {
-        if (!empty($filters['item_id'])) {
-            $query->where('item_id', $filters['item_id']);
-        }
-        if (!empty($filters['papertype'])) {
-            $query->where('papertype', 'like', '%' . addslashes($filters['papertype']) . '%');
-        }
-        if (!empty($filters['grade'])) {
-            $query->where('grade', $filters['grade']);
-        }
-        if (!empty($filters['date_from'])) {
-            $query->whereDate('source_tr_date', '>=', $filters['date_from']);
-        }
-        if (!empty($filters['date_to'])) {
-            $query->whereDate('source_tr_date', '<=', $filters['date_to']);
-        }
-
-        return $query;
-    }
 }

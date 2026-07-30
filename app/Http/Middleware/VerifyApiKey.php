@@ -18,9 +18,8 @@ class VerifyApiKey
     {
         $configuredKey = config('app.api_key');
 
-        // If no API key configured, skip auth entirely.
-        // This makes API key an opt-in security layer for internal apps.
         if (empty($configuredKey)) {
+            // No key configured — allow all (SPA / internal use)
             return $next($request);
         }
 

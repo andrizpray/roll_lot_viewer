@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\ImportJob;
 use App\Services\ExcelTypeDetector;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {

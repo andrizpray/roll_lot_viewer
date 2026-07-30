@@ -8,7 +8,7 @@ import os
 DB_CONFIG = {
     'dbname': 'roll_lot_viewer',
     'user': 'roll_lot_user',
-    'password': 'roll_lot_secure_2026',
+    'password': os.environ.get('DB_PASSWORD'),
     'host': '127.0.0.1',
     'port': 5432
 }

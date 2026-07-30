@@ -174,7 +174,8 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
 
     # Save file
     os.makedirs(EXPORT_DIR, exist_ok=True)
-    filename = f"export_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    label = "roll" if mode == "roll" else "sheet"
+    filename = f"{label}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     filepath = os.path.join(EXPORT_DIR, filename)
     wb.save(filepath)
     wb.close()

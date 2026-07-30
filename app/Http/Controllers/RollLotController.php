@@ -104,7 +104,8 @@ class RollLotController extends Controller
             $query->where('width', $filters['width']);
         }
         if (!empty($filters['lot_id'])) {
-            $query->where('lot_id', 'like', '%' . $filters['lot_id'] . '%');
+            $escaped = str_replace(['%', '_'], ['\\%', '\\_'], $filters['lot_id']);
+            $query->where('lot_id', 'like', '%' . $escaped . '%');
         }
 
         $perPage = (int) $request->get('per_page', 50);

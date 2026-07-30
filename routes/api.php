@@ -15,7 +15,8 @@ Route::get('/health', HealthController::class);
 // All API routes protected by API key
 Route::middleware('api_key')->group(function () {
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'summary']);
+    Route::get('/dashboard', [DashboardController::class, 'summary'])
+        ->middleware('throttle:60,1');
 
     // Import routes
     Route::post('/imports', [ImportController::class, 'upload'])
@@ -39,7 +40,10 @@ Route::middleware('api_key')->group(function () {
     Route::get('/sheets/{id}', [PaperSheetController::class, 'show']);
 
     // Export routes
-    Route::get('/export', [ExportController::class, 'export']);
-    Route::get('/export/{id}/status', [ExportController::class, 'status']);
-    Route::get('/export/{id}/download', [ExportController::class, 'download']);
+    Route::get('/export', [ExportController::class, 'export'])
+        ->middleware('throttle:60,1');
+    Route::get('/export/{id}/status', [ExportController::class, 'status'])
+        ->middleware('throttle:60,1');
+    Route::get('/export/{id}/download', [ExportController::class, 'download'])
+        ->middleware('throttle:60,1');
 });

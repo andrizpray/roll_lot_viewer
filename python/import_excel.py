@@ -40,11 +40,12 @@ COLUMN_MAP = {
     "Diameter": "diameter",
     "Thickness": "thickness",
     
-    # Sheet-specific columns
-    "Qty": "qty",
-    "Keterangan": "keterangan",
-    "Qty_Pack": "content_pack",
-    "Dimension": "dimension",
+    # Sheet-specific columns — listed here for reference only (not valid in roll_lots table)
+    # These are intentionally mapped to None so they get skipped if found in a roll file
+    "Qty": None,
+    "Keterangan": None,
+    "Qty_Pack": None,
+    "Dimension": None,
 }
 
 # Columns that exist in roll_lot_histories table
@@ -238,14 +239,14 @@ SHEET_COLUMN_MAP = {
     "DateTime": "source_tr_date",
     "Comments": "comments",
     "Keterangan": "keterangan",
-    "LocationID": "location_id",
+    "LocationID": None,  # location_id column does not exist in paper_sheets schema
     "No": None,
 }
 
 
 def detect_type_from_headers(headers):
     """Auto-detect import type from Excel headers."""
-    header_set = {h.strip() for h in headers if h}
+    header_set = {h.strip() for h in headers if h and isinstance(h, str)}
     # Sheet-specific headers
     if header_set & {"Dimension", "Content Pack", "Qty_Pack", "Keterangan"}:
         return "sheet"
@@ -274,7 +275,7 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
             db_columns.append(col)
 
     placeholders = ", ".join(["%s"] * len(db_columns))
-    columns = ", ".join([f'"{c}"' for c in db_columns])
+    columns = ", ".join(['"' + c + '"' for c in db_columns])
     update_cols = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in db_columns])
     insert_sql = (
         f'INSERT INTO paper_sheets ({columns}, import_batch_id) '
@@ -293,11 +294,15 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
     total = success = failed = 0
     errors = []
 
+    # Kumpulkan semua values dulu — satu koneksi, satu transaksi
+    batch = []  # list of tuples, setiap tuple = satu baris values
+
     for row in ws.iter_rows(min_row=2, values_only=True):
         if all(cell is None for cell in row):
             continue
         total += 1
         row_number = total + 1
+        lot_id = None
         try:
             values = []
             for i, (h, db_col) in enumerate(col_map_list):
@@ -322,9 +327,11 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
                 if col_name in val_idx and values[val_idx[col_name]] is not None:
                     values[val_idx[col_name]] = str(values[val_idx[col_name]])
 
-            lot_id = row[1] if len(row) > 1 and row[1] else None
-            if lot_id is not None:
-                lot_id = str(lot_id)
+            # Extract lot_id from val_idx (NOT hardcoded row[1]) for accurate error logging
+            if "lot_id" in val_idx and values[val_idx["lot_id"]] is not None:
+                lot_id = str(values[val_idx["lot_id"]])
+            else:
+                lot_id = None
 
             # Parse description for missing fields
             desc_idx = next((i for i, (h, dc) in enumerate(col_map_list) if dc == "description_raw"), None)
@@ -344,24 +351,53 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
                     values.append(None)
 
             values.append(job_id)
+            batch.append(tuple(values))
 
-            conn = get_connection()
-            try:
-                cur = conn.cursor()
-                cur.execute(insert_sql, values)
-                conn.commit()
-            finally:
-                conn.close()
-            success += 1
         except Exception as exc:
             failed += 1
-            errors.append((row_number, lot_id if 'lot_id' in dir() else None, None, str(exc)))
+            errors.append((row_number, lot_id, None, str(exc)))
 
         if total % IMPORT_BATCH_SIZE == 0:
             _update_progress(job_id, total, success, failed)
 
     wb.close()
+
+    # --- Satu transaksi: BEGIN -> executemany batch -> COMMIT -> delete stale ---
+    # ISI 2: batch insert (executemany per IMPORT_BATCH_SIZE baris)
+    # ISI 3: _delete_stale() HANYA dipanggil setelah semua baris berhasil di-commit
+    insert_ok = False
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        for i in range(0, len(batch), IMPORT_BATCH_SIZE):
+            chunk = batch[i:i + IMPORT_BATCH_SIZE]
+            cur.executemany(insert_sql, chunk)
+        conn.commit()  # <-- commit dulu, baru delete stale
+        success = len(batch)
+        insert_ok = True
+    except Exception as exc:
+        conn.rollback()
+        failed = len(batch)
+        errors.append((0, None, None, f"Batch insert failed, all rolled back: {exc}"))
+        if errors:
+            _log_errors(job_id, errors)
+        _update_progress(job_id, total, 0, failed, completed=True)
+        print(f"[import] sheet job {job_id}: ROLLBACK — {exc}")
+        return 0
+    finally:
+        conn.close()
+
+    if not insert_ok:
+        return 0
+
+    # ISI 3: delete stale SETELAH semua baris berhasil di-commit
+    # Guard: jangan delete_stale kalau batch kosong — akan hapus semua row di tabel!
+    if not batch:
+        _update_progress(job_id, total, 0, 0, completed=True)
+        print(f"[import] sheet job {job_id}: empty file — skipping delete_stale to prevent data wipe")
+        return 0
     _delete_stale("paper_sheets", job_id)
+
     if errors:
         _log_errors(job_id, errors)
     _update_progress(job_id, total, success, failed, completed=True)
@@ -423,11 +459,11 @@ def import_roll_lots(job_id, filepath):
     if job_type == "sheet":
         return _import_sheet_rows(job_id, filepath, wb, ws, headers)
 
-    # Roll mode: map headers to DB columns
+    # Roll mode: map headers to DB columns (skip None-mapped / sheet-only columns)
     db_columns = []
     header_to_col = {}
     for h in headers:
-        if h in COLUMN_MAP:
+        if h in COLUMN_MAP and COLUMN_MAP[h] is not None:
             db_columns.append(COLUMN_MAP[h])
             header_to_col[h] = COLUMN_MAP[h]
 
@@ -445,7 +481,7 @@ def import_roll_lots(job_id, filepath):
 
     # Build INSERT SQL — use INSERT ... ON CONFLICT (upsert) for PostgreSQL
     placeholders = ", ".join(["%s"] * len(db_columns))
-    columns = ", ".join([f'"{c}"' for c in db_columns])
+    columns = ", ".join(['"' + c + '"' for c in db_columns])
     update_cols = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in db_columns])
     insert_sql = (
         f'INSERT INTO {table} ({columns}, import_batch_id) '
@@ -453,11 +489,20 @@ def import_roll_lots(job_id, filepath):
         f'ON CONFLICT (lot_id) DO UPDATE SET {update_cols}, import_batch_id = EXCLUDED.import_batch_id'
     )
 
-    # Process rows
+    # Process rows — kumpulkan semua values dulu (ISI 2: batch insert)
     total = 0
-    success = 0
     failed = 0
     errors = []  # (row_number, lot_id, description_raw, reason)
+
+    # Pre-build col_index sekali, bukan per baris
+    # Filter out None-mapped columns (sheet-only entries that have None value in COLUMN_MAP)
+    col_index = {COLUMN_MAP[h]: i for i, h in enumerate(headers) if h in COLUMN_MAP and COLUMN_MAP[h] is not None}
+
+    # Pre-build ordered header list untuk lookup langsung via index (hindari dict per baris)
+    mapped_headers = [(i, h, COLUMN_MAP[h]) for i, h in enumerate(headers) if h in COLUMN_MAP and COLUMN_MAP[h] is not None]
+
+    batch = []  # list of tuples, setiap tuple = values satu baris
+    lot_ids_in_file = []  # kumpulkan lot_id untuk batch snapshot
 
     for row in ws.iter_rows(min_row=2, values_only=True):
         if all(cell is None for cell in row):
@@ -465,109 +510,109 @@ def import_roll_lots(job_id, filepath):
 
         total += 1
         row_number = total + 1  # +1 for header row
+        lot_id = None
 
         try:
-            # Map row values to DB columns
-            data = dict(zip(headers, row))
             values = []
-            for h in headers:
-                if h in COLUMN_MAP:
-                    val = data.get(h)
-                    # Normalize datetime objects to strings for SQLite
-                    if isinstance(val, datetime.time):
-                        val = val.strftime("%H:%M:%S")
-                    elif isinstance(val, datetime.date):
-                        val = val.strftime("%Y-%m-%d")
-                    elif isinstance(val, datetime.datetime):
-                        val = val.strftime("%Y-%m-%d %H:%M:%S")
-                    # Convert empty strings and dash placeholders to None
-                    elif val == "" or val == "-":
-                        val = None
-                    # Cap numeric overflow (Excel cell corruption)
-                    elif isinstance(val, (int, float)) and abs(val) >= 10**13:
-                        val = None
-                    values.append(val)
+            for idx, h, db_col in mapped_headers:
+                val = row[idx] if idx < len(row) else None
+                # Normalize datetime objects to strings
+                # NOTE: datetime.datetime IS-A datetime.date — check datetime first!
+                if isinstance(val, datetime.time):
+                    val = val.strftime("%H:%M:%S")
+                elif isinstance(val, datetime.datetime):
+                    val = val.strftime("%Y-%m-%d %H:%M:%S")
+                elif isinstance(val, datetime.date):
+                    val = val.strftime("%Y-%m-%d")
+                # Convert empty strings and dash placeholders to None
+                elif val == "" or val == "-":
+                    val = None
+                # Cap numeric overflow (Excel cell corruption)
+                elif isinstance(val, (int, float)) and abs(val) >= 10**13:
+                    val = None
+                values.append(val)
 
-            # Extract lot_id and description for processing
-            lot_id = data.get("Lot ID") or data.get("LotID")
-            if lot_id is not None:
-                lot_id = str(lot_id)
-            description_raw = data.get("Description")
-            
-            # Parse description to fill missing fields (different logic for Roll vs Sheet)
+            # Extract lot_id and description via pre-built index (no dict alloc)
+            lot_id_idx = col_index.get("lot_id")
+            lot_id = str(values[lot_id_idx]) if lot_id_idx is not None and values[lot_id_idx] is not None else None
+
+            desc_idx = col_index.get("description_raw")
+            description_raw = values[desc_idx] if desc_idx is not None else None
+
+            # Parse description to fill missing fields — satu kali per baris
+            parsed = None
             if description_raw:
-                # Create a dict mapping db_column to index in values array
-                col_index = {COLUMN_MAP[h]: i for i, h in enumerate(headers) if h in COLUMN_MAP}
-                
-                if table == "paper_sheets":
-                    # Sheet parsing: Description → papertype, gramature, dimension
-                    parsed = parse_description_sheet(description_raw)
-                    
-                    if "papertype" in col_index and not values[col_index["papertype"]]:
-                        values[col_index["papertype"]] = parsed['papertype']
-                    
-                    if "gramature" in col_index and not values[col_index["gramature"]]:
-                        values[col_index["gramature"]] = parsed['gramature']
-                    
-                    if "dimension" in col_index and not values[col_index["dimension"]]:
-                        values[col_index["dimension"]] = parsed['dimension']
-                
-                else:
-                    # Roll parsing: Description → papertype, gramature, playbond, width
-                    parsed = parse_description(description_raw)
-                    
-                    if "papertype" in col_index and not values[col_index["papertype"]]:
-                        values[col_index["papertype"]] = parsed['papertype']
-                    
-                    if "gramature" in col_index and not values[col_index["gramature"]]:
-                        values[col_index["gramature"]] = parsed['gramature']
-                    
-                    if "playbond" in col_index and not values[col_index["playbond"]]:
-                        values[col_index["playbond"]] = parsed['playbond']
-                    
-                    if "width" in col_index and not values[col_index["width"]]:
-                        values[col_index["width"]] = parsed['width']
-
-            # Append values for derived columns (parsed from description, not in Excel headers)
-            if derived_cols and description_raw:
                 parsed = parse_description(description_raw)
-                for col in derived_cols:
-                    values.append(parsed.get(col))
-            elif derived_cols:
-                for _ in derived_cols:
-                    values.append(None)
+                for field in ("papertype", "gramature", "playbond", "width"):
+                    if field in col_index and not values[col_index[field]]:
+                        values[col_index[field]] = parsed[field]
 
-            # --- Snapshot history (only for roll_lots, not sheets) ---
+            # Append values for derived columns (not in Excel headers)
+            if derived_cols:
+                if parsed is None and description_raw:
+                    parsed = parse_description(description_raw)
+                for col in derived_cols:
+                    values.append(parsed.get(col) if parsed else None)
+
+            # Kumpulkan lot_id untuk batch snapshot (dilakukan setelah loop)
             if table == "roll_lots" and lot_id:
-                _snapshot_existing(lot_id, job_id)
+                lot_ids_in_file.append(lot_id)
 
             # Append job_id as import_batch_id
             values.append(job_id)
-
-            # Insert single row
-            conn = get_connection()
-            try:
-                cur = conn.cursor()
-                cur.execute(insert_sql, values)
-                conn.commit()
-            finally:
-                conn.close()
-
-            success += 1
+            batch.append(tuple(values))
 
         except Exception as exc:
             failed += 1
-            lot_id_val = data.get("Lot ID") if 'data' in dir() else None
-            desc_val = data.get("Description") if 'data' in dir() else None
-            errors.append((row_number, lot_id_val, desc_val, str(exc)))
+            description_fallback = row[col_index["description_raw"]] if "description_raw" in col_index and col_index["description_raw"] < len(row) else None
+            errors.append((row_number, lot_id, description_fallback, str(exc)))
 
         # Update progress every IMPORT_BATCH_SIZE rows
         if total % IMPORT_BATCH_SIZE == 0:
-            _update_progress(job_id, total, success, failed)
+            _update_progress(job_id, total, len(batch), failed)
 
     wb.close()
 
-    # Full-sync: delete roll lots not present in this upload
+    # --- Snapshot history SEKALI untuk semua lot_id (bukan per baris) ---
+    # Deduplicate: file mungkin punya baris duplikat — hindari double snapshot
+    if table == "roll_lots" and lot_ids_in_file:
+        _snapshot_existing_batch(list(dict.fromkeys(lot_ids_in_file)), job_id)
+
+    # --- Satu transaksi: BEGIN -> executemany batch -> COMMIT -> delete stale ---
+    # ISI 2: batch executemany, bukan row-by-row dengan koneksi baru
+    # ISI 3: _delete_stale() HANYA setelah semua baris berhasil di-commit
+    insert_ok = False
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        for i in range(0, len(batch), IMPORT_BATCH_SIZE):
+            chunk = batch[i:i + IMPORT_BATCH_SIZE]
+            cur.executemany(insert_sql, chunk)
+        conn.commit()  # <-- commit dulu, baru delete stale
+        success = len(batch)
+        insert_ok = True
+    except Exception as exc:
+        conn.rollback()
+        success = 0
+        failed = len(batch)
+        errors.append((0, None, None, f"Batch insert failed, all rolled back: {exc}"))
+        if errors:
+            _log_errors(job_id, errors)
+        _update_progress(job_id, total, 0, failed, completed=True)
+        print(f"[import] job {job_id}: ROLLBACK — {exc}")
+        return 0
+    finally:
+        conn.close()
+
+    if not insert_ok:
+        return 0
+
+    # ISI 3: Full-sync delete HANYA setelah commit berhasil
+    # Guard: jangan delete_stale kalau batch kosong — akan hapus semua row di tabel!
+    if not batch:
+        _update_progress(job_id, total, 0, 0, completed=True)
+        print(f"[import] job {job_id}: empty file — skipping delete_stale to prevent data wipe")
+        return 0
     _delete_stale(table, job_id)
 
     # Log errors to import_errors table
@@ -604,45 +649,82 @@ def _delete_stale(table, job_id):
     return deleted
 
 
-def _snapshot_existing(lot_id, job_id):
-    """Copy existing roll_lot record to roll_lot_histories before overwrite."""
+def _snapshot_existing_batch(lot_ids, job_id):
+    """Batch-copy existing roll_lot records to roll_lot_histories.
+
+    One connection per call. Handles files with >32767 lots by chunking the
+    SELECT. INSERT also chunked to keep param count within PostgreSQL limits.
+    """
+    if not lot_ids:
+        return
+
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_connection()
     try:
         cur = conn.cursor()
-        # Check if this lot_id already exists
-        cur.execute("SELECT * FROM roll_lots WHERE lot_id = %s", (lot_id,))
-        row = cur.fetchone()
-        if row is None:
-            return  # No existing record to snapshot
 
-        # Get column names from cursor description
+        # --- SELECT in chunks to stay under PostgreSQL param limit (32767) ---
+        # ponytail: param limit hard; chunk at 30000 to leave headroom
+        chunk_size = 30000
+        all_rows = []
+        for i in range(0, len(lot_ids), chunk_size):
+            chunk = lot_ids[i:i + chunk_size]
+            placeholders = ",".join(["%s"] * len(chunk))
+            cur.execute(
+                f"SELECT * FROM roll_lots WHERE lot_id IN ({placeholders})",
+                chunk,
+            )
+            all_rows.extend(cur.fetchall())
+
+        if not all_rows:
+            return
+
         col_names = [desc[0] for desc in cur.description]
-        existing = dict(zip(col_names, row))
 
-        # Build history insert with only columns that exist in history table
-        now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        history_values = []
-        history_cols = []
+        # Build history rows — one tuple per existing lot
+        history_data = []
+        history_cols = None
 
-        for col in HISTORY_COLUMNS:
-            if col in existing:
-                history_cols.append(col)
-                history_values.append(existing[col])
+        for row in all_rows:
+            existing = dict(zip(col_names, row))
+            h_cols = []
+            h_vals = []
+            for col in HISTORY_COLUMNS:
+                if col in existing:
+                    h_cols.append(col)
+                    h_vals.append(existing[col])
+            h_cols.extend(["archived_at", "created_at", "updated_at"])
+            h_vals.extend([now, now, now])
 
-        # Add archived_at and created_at/updated_at
-        history_cols.extend(["archived_at", "created_at", "updated_at"])
-        history_values.extend([now, now, now])
+            if history_cols is None:
+                history_cols = h_cols  # same shape for every row
+            history_data.append(tuple(h_vals))
 
-        placeholders = ", ".join(["%s"] * len(history_cols))
+        if not history_data or history_cols is None:
+            return
+
         col_str = ", ".join([f'"{c}"' for c in history_cols])
+        ph = ", ".join(["%s"] * len(history_cols))
 
-        cur.execute(
-            f"INSERT INTO roll_lot_histories ({col_str}) VALUES ({placeholders})",
-            history_values,
-        )
-        conn.commit()
+        # --- INSERT in chunks to stay under PostgreSQL param limit ---
+        insert_ok = True
+        for i in range(0, len(history_data), chunk_size):
+            chunk = history_data[i:i + chunk_size]
+            try:
+                cur.executemany(
+                    f"INSERT INTO roll_lot_histories ({col_str}) VALUES ({ph})",
+                    chunk,
+                )
+            except Exception as exc:
+                insert_ok = False
+                conn.rollback()
+                print(f"[import] WARNING: snapshot history failed at chunk {i}: {exc}")
+                break
+        if insert_ok:
+            conn.commit()
     finally:
         conn.close()
+    return insert_ok
 
 
 def _log_errors(job_id, errors):
