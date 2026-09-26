@@ -260,8 +260,8 @@ def _import_sheet_rows(job_id, filepath, wb, ws, headers):
     """Import paper sheets using positional column mapping."""
     col_map_list = []
     for h in headers:
-        if h and h.strip() in SHEET_COLUMN_MAP:
-            col_map_list.append((h, SHEET_COLUMN_MAP[h.strip()]))
+        if h and str(h).strip() in SHEET_COLUMN_MAP:
+            col_map_list.append((h, SHEET_COLUMN_MAP[str(h).strip()]))
         else:
             col_map_list.append((h, None))
 
