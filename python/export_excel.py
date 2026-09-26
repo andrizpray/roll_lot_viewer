@@ -106,7 +106,10 @@ def export_roll_lots(job_id, filters=None, mode="roll"):
     sql = f"SELECT * FROM {table}"
     if where_clauses:
         sql += " WHERE " + " AND ".join(where_clauses)
-    if mode == "sheet":
+    # Batch lot_ids mode: sort by lot_id first, then width, then gramature
+    if filters.get("lot_ids"):
+        sql += f" ORDER BY lot_id, width, gramature LIMIT {MAX_EXPORT_ROWS}"
+    elif mode == "sheet":
         sql += f" ORDER BY dimension, gramature LIMIT {MAX_EXPORT_ROWS}"
     else:
         sql += f" ORDER BY width, gramature LIMIT {MAX_EXPORT_ROWS}"
