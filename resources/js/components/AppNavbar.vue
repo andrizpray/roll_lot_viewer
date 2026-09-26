@@ -54,20 +54,20 @@ defineEmits(['toggle-sidebar']);
 .nav-toggle {
   background: none;
   border: none;
-  color: var(--text-body);
+  color: var(--color-body, #566a7f);
   cursor: pointer;
   padding: 0.4rem;
   border-radius: var(--radius-sm);
   display: flex;
-  transition: all var(--transition);
+  transition: all 0.2s ease;
 }
-.nav-toggle:hover { background: var(--bg-hover); color: var(--primary); }
+.nav-toggle:hover { background: var(--color-bg-hover, #f5f5f9); color: var(--primary); }
 
 .breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-.crumb-root { color: var(--text-muted); }
-.crumb-sep { color: var(--text-muted); }
+.crumb-root { color: var(--color-muted, #a5a8b5); }
+.crumb-sep { color: var(--color-muted, #a5a8b5); }
 .crumb-icon { color: var(--primary); font-size: 0.95rem; }
-.crumb-current { color: var(--text-heading); font-weight: 600; }
+.crumb-current { color: var(--color-heading, #2f3349); font-weight: 600; }
 
 .navbar-right { display: flex; align-items: center; gap: 0.75rem; }
 .nav-action {
@@ -77,10 +77,10 @@ defineEmits(['toggle-sidebar']);
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--text-body);
-  transition: all var(--transition);
+  color: var(--color-body, #566a7f);
+  transition: all 0.2s ease;
 }
-.nav-action:hover { background: var(--bg-hover); color: var(--primary); }
+.nav-action:hover { background: var(--color-bg-hover, #f5f5f9); color: var(--primary); }
 .nav-action i { font-size: 1.15rem; }
 
 .user-avatar {

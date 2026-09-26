@@ -1,15 +1,75 @@
 /* =====================================================================
    Roll Lot Viewer — Global Design System
-   Visual language inspired by Sneat admin template, re-implemented for
-   this Vue/PrimeVue app. Brand accent kept as emerald.
+   Adapted from Sneat Bootstrap HTML Laravel admin template
+   Tailwind v4 @theme tokens + CSS variables for component compatibility
    ===================================================================== */
 
-/* ─── Fonts ─── */
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300..800;1,300..800&family=Fira+Code:wght@400;500;600&display=swap');
 
-/* ─── Design Tokens ─── */
+@import "tailwindcss";
+@source "./resources/js/**";
+
+/* ─── Tailwind v4 Theme — Sneat Palette ─── */
+@theme {
+  /* Brand — emerald */
+  --color-primary: #059669;
+  --color-primary-dark: #047857;
+  --color-primary-darker: #065f46;
+  --color-primary-light: #ecfdf5;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f8f9fc;
+  --color-bg-body: #f5f5f9;
+  --color-bg-hover: #f5f5f9;
+
+  /* Text */
+  --color-heading: #2f3349;
+  --color-body: #566a7f;
+  --color-muted: #a5a8b5;
+  --color-on-primary: #ffffff;
+
+  /* Borders */
+  --color-border: #e7e8ef;
+  --color-border-light: #f1f2f6;
+
+  /* Status */
+  --color-success: #16a34a;
+  --color-success-bg: #e8f9ee;
+  --color-warning: #d97706;
+  --color-warning-bg: #fff2e0;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fdeaea;
+  --color-info: #0ea5e9;
+  --color-info-bg: #e7f6fd;
+
+  /* Shadows — Sneat-style soft elevation */
+  --shadow-sm: 0 0.125rem 0.375rem 0 rgba(47, 43, 61, 0.08);
+  --shadow-md: 0 0.25rem 1rem 0 rgba(47, 43, 61, 0.1);
+  --shadow-lg: 0 0.5rem 1.5rem 0 rgba(47, 43, 61, 0.14);
+  --shadow-xl: 0 1rem 2.5rem 0 rgba(47, 43, 61, 0.16);
+
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1rem;
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --sidebar-collapsed: 80px;
+  --navbar-height: 64px;
+  --content-max: 1440px;
+
+  /* Fonts */
+  --font-sans: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Fira Code', 'SF Mono', 'Consolas', monospace;
+}
+
+/* ─── Legacy CSS Variables (component compat) ─── */
 :root {
-  /* Brand (emerald) */
+  /* Brand */
   --primary: #059669;
   --primary-dark: #047857;
   --primary-darker: #065f46;
@@ -42,11 +102,6 @@
   --danger-bg: #fdeaea;
   --info: #0ea5e9;
   --info-bg: #e7f6fd;
-
-  /* Elevation (Sneat-style soft shadows) */
-  --shadow-sm: 0 0.125rem 0.375rem 0 rgba(47, 43, 61, 0.08);
-  --shadow-md: 0 0.25rem 1rem 0 rgba(47, 43, 61, 0.1);
-  --shadow-lg: 0 0.5rem 1.5rem 0 rgba(47, 43, 61, 0.14);
 
   /* Radius */
   --radius-sm: 0.375rem;

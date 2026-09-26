@@ -60,22 +60,20 @@ onUnmounted(() => window.removeEventListener('resize', checkViewport));
 </script>
 
 <style scoped>
-.layout { min-height: 100vh; }
 .layout-main {
   margin-left: var(--sidebar-width);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: margin-left var(--transition);
+  transition: margin-left 0.2s ease;
 }
 .sidebar-collapsed .layout-main { margin-left: var(--sidebar-collapsed); }
 
-.layout-content { flex: 1; padding: 1.75rem; }
-.content-container { max-width: var(--content-max); margin: 0 auto; }
+.layout-content { flex: 1; }
 
 @media (max-width: 1024px) {
   .layout-main,
   .sidebar-collapsed .layout-main { margin-left: 0; }
-  .layout-content { padding: 1.25rem; }
+  .layout-content { padding: 0.75rem; }
 }
 </style>
