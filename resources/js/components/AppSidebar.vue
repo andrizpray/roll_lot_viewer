@@ -90,7 +90,7 @@ const menu = [
   align-items: center;
   justify-content: space-between;
   padding: 0 1.25rem;
-  border-bottom: 1px solid var(--color-border-light, #f1f2f6);
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 .brand-link { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
@@ -98,7 +98,7 @@ const menu = [
   width: 2.1rem;
   height: 2.1rem;
   border-radius: var(--radius-md);
-  background: var(--color-primary-light, #ecfdf5);
+  background: var(--primary-light);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -108,14 +108,14 @@ const menu = [
 .brand-text {
   font-weight: 700;
   font-size: 1.05rem;
-  color: var(--color-heading, #2f3349);
+  color: var(--text-heading);
   white-space: nowrap;
   overflow: hidden;
 }
 .sidebar-toggle-inline {
   background: none;
   border: none;
-  color: var(--color-muted, #a5a8b5);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0.25rem;
   border-radius: var(--radius-sm);
@@ -123,7 +123,7 @@ const menu = [
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
-.sidebar-toggle-inline:hover { background: var(--color-bg-hover, #f5f5f9); color: var(--primary); }
+.sidebar-toggle-inline:hover { background: var(--bg-hover); color: var(--primary); }
 
 .collapsed .brand-text,
 .collapsed .sidebar-toggle-inline,
@@ -146,7 +146,7 @@ const menu = [
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-muted, #a5a8b5);
+  color: var(--text-muted);
   padding: 0.75rem 0.85rem 0.35rem;
 }
 .menu-item {
@@ -155,14 +155,14 @@ const menu = [
   gap: 0.75rem;
   padding: 0.65rem 0.85rem;
   border-radius: var(--radius-md);
-  color: var(--color-body, #566a7f);
+  color: var(--text-body);
   font-weight: 500;
   font-size: 0.9rem;
   transition: all 0.2s ease;
   white-space: nowrap;
   text-decoration: none;
 }
-.menu-item:hover { background: var(--color-bg-hover, #f5f5f9); color: var(--primary); }
+.menu-item:hover { background: var(--bg-hover); color: var(--primary); }
 .menu-item.active {
   background: var(--primary);
   color: #fff;
@@ -174,8 +174,8 @@ const menu = [
 /* Footer */
 .sidebar-footer {
   padding: 1rem 1.25rem;
-  border-top: 1px solid var(--color-border-light, #f1f2f6);
+  border-top: 1px solid var(--border-light);
   flex-shrink: 0;
 }
-.footer-text { font-size: 0.75rem; color: var(--color-muted, #a5a8b5); }
+.footer-text { font-size: 0.75rem; color: var(--text-muted); }
 </style>
