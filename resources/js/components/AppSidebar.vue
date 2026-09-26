@@ -83,6 +83,21 @@ const menu = [
 </script>
 
 <style scoped>
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: width var(--transition), transform var(--transition);
+}
+.sidebar.collapsed { width: var(--sidebar-collapsed); }
+
 /* Brand */
 .sidebar-brand {
   height: var(--navbar-height);
@@ -178,4 +193,17 @@ const menu = [
   flex-shrink: 0;
 }
 .footer-text { font-size: 0.75rem; color: var(--text-muted); }
+
+/* Mobile */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(47, 43, 61, 0.5);
+  z-index: 999;
+}
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); width: var(--sidebar-width); }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar.collapsed { width: var(--sidebar-width); }
+}
 </style>

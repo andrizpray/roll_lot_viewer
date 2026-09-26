@@ -69,7 +69,7 @@ onUnmounted(() => window.removeEventListener('resize', checkViewport));
 }
 .sidebar-collapsed .layout-main { margin-left: var(--sidebar-collapsed); }
 
-.layout-content { flex: 1; }
+.layout-content { flex: 1; padding: 1.75rem; }
 
 @media (max-width: 1024px) {
   .layout-main,
