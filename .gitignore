@@ -50,3 +50,4 @@ docs/superpowers/
 MIGRATION_COMPLETE.md
 migrate_sqlite_to_postgres.py
 deploy-package/
+.venv/
