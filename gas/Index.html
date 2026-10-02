@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f9; color: #333; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.3rem; } h1 span { color: #059669; }
+    .card { background: #fff; border: 1px solid #e7e8ef; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+    .tabs { display: flex; gap: .25rem; border-bottom: 1px solid #e7e8ef; margin-bottom: 1rem; }
+    .tabs button { border: none; background: none; padding: .6rem 1rem; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent; }
+    .tabs button.active { color: #059669; border-bottom-color: #059669; font-weight: 600; }
+    textarea, input, select { width: 100%; padding: .5rem .7rem; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+    label { display: block; font-size: .75rem; font-weight: 600; text-transform: uppercase; color: #666; margin: .6rem 0 .25rem; }
+    .btn { background: #059669; color: #fff; border: none; padding: .6rem 1.3rem; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+    .btn:disabled { opacity: .6; }
+    .btn2 { background: #fff; color: #059669; border: 1px solid #059669; }
+    table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 1rem; }
+    th { background: #f8f9fc; text-align: left; padding: .6rem; border-bottom: 1px solid #e7e8ef; text-transform: uppercase; font-size: .7rem; }
+    td { padding: .55rem .6rem; border-bottom: 1px solid #f1f2f6; }
+    tr:hover td { background: #ecfdf5; }
+    #msg { padding: .8rem; border-radius: 6px; margin: 1rem 0; display: none; }
+    .err { background: #fdeaea; color: #991b1b; display: block !important; }
+    .ok { background: #e8f9ee; color: #166534; display: block !important; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; }
+    a.dl { color: #059669; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Roll Lot <span>Viewer</span></h1>
+  <div id="msg"></div>
+
+  <div class="card">
+    <div class="tabs">
+      <button id="tab-search" class="active" onclick="tab('search')">Search</button>
+      <button id="tab-import" onclick="tab('import')">Import</button>
+    </div>
+
+    <!-- SEARCH -->
+    <div id="pane-search">
+      <div class="tabs" style="border-bottom:none;margin:0">
+        <button id="mt-batch" class="active" onclick="mode('batch')">Batch LotID</button>
+        <button id="mt-adv" onclick="mode('adv')">Advanced</button>
+      </div>
+      <div id="pane-batch">
+        <label>Lot IDs (newline/comma)</label>
+        <textarea id="lotIds" rows="5" placeholder="LOT001&#10;LOT002"></textarea>
+      </div>
+      <div id="pane-adv" style="display:none">
+        <div class="fields">
+          <div><label>Item ID</label><input id="f_item_id"></div>
+          <div><label>Paper Type</label><input id="f_papertype"></div>
+          <div><label>Grade</label><input id="f_grade"></div>
+          <div><label>Width</label><input id="f_width"></div>
+          <div><label>Gramature</label><input id="f_gramature"></div>
+          <div><label>Lot ID contains</label><input id="f_lot_id"></div>
+        </div>
+      </div>
+      <button class="btn" id="btnSearch" onclick="doSearch()">Search</button>
+      <button class="btn btn2" id="btnExport" onclick="doExport()" style="display:none;margin-left:.5rem">Export Excel</button>
+    </div>
+
+    <!-- IMPORT -->
+    <div id="pane-import" style="display:none">
+      <label>Excel file (.xlsx)</label>
+      <input type="file" id="file" accept=".xlsx">
+      <button class="btn" id="btnImport" onclick="doImport()">Import</button>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div id="resultInfo" style="font-size:.85rem;color:#666;margin-bottom:.5rem"></div>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+  </div>
+</div>
+
+<script>
+  let m = 'batch', lastQuery = null;
+
+  function tab(t) {
+    ['search','import'].forEach(x => {
+      document.getElementById('tab-'+x).classList.toggle('active', x===t);
+      document.getElementById('pane-'+x).style.display = x===t ? '' : 'none';
+    });
+  }
+  function mode(v) {
+    m = v;
+    document.getElementById('mt-batch').classList.toggle('active', v==='batch');
+    document.getElementById('mt-adv').classList.toggle('active', v==='adv');
+    document.getElementById('pane-batch').style.display = v==='batch' ? '' : 'none';
+    document.getElementById('pane-adv').style.display = v==='adv' ? '' : 'none';
+  }
+  function msg(text, cls) {
+    const el = document.getElementById('msg');
+    el.className = cls; el.textContent = text;
+  }
+  function collect() {
+    if (m === 'batch') {
+      const lot_ids = document.getElementById('lotIds').value.split(/[\n,;\s]+/).filter(Boolean);
+      if (!lot_ids.length) throw new Error('Masukkan minimal 1 LotID');
+      return { mode: 'batch', lot_ids };
+    }
+    const f = {};
+    ['item_id','papertype','grade','width','gramature','lot_id'].forEach(k => {
+      const v = document.getElementById('f_'+k).value.trim();
+      if (v) f[k] = v;
+    });
+    if (!Object.keys(f).length) throw new Error('Isi minimal 1 filter');
+    return Object.assign({ mode: 'advanced' }, f);
+  }
+
+  function render(rows) {
+    const tbl = document.getElementById('tbl');
+    document.getElementById('resultCard').style.display = '';
+    if (!rows.length) { tbl.innerHTML = '<tr><td>Tidak ada data</td></tr>'; return; }
+    const cols = Object.keys(rows[0]);
+    tbl.innerHTML = '<tr>' + cols.map(c => '<th>'+c+'</th>').join('') + '</tr>' +
+      rows.map(r => '<tr>' + cols.map(c => '<td>'+(r[c] ?? '')+'</td>').join('') + '</tr>').join('');
+  }
+
+  function doSearch() {
+    msg('Mencari...', '');
+    document.getElementById('btnSearch').disabled = true;
+    let q;
+    try { q = collect(); } catch(e) { msg(e.message, 'err'); document.getElementById('btnSearch').disabled = false; return; }
+    google.script.run.withSuccessHandler(rows => {
+      document.getElementById('btnSearch').disabled = false;
+      document.getElementById('btnExport').style.display = '';
+      lastQuery = q;
+      document.getElementById('resultInfo').textContent = rows.length + ' baris ditemukan';
+      render(rows); msg('', '');
+    }).withFailureHandler(e => {
+      document.getElementById('btnSearch').disabled = false;
+      msg(e.message, 'err');
+    }).search(q);
+  }
+
+  function doExport() {
+    msg('Membuat export...', '');
+    document.getElementById('btnExport').disabled = true;
+    google.script.run.withSuccessHandler(res => {
+      document.getElementById('btnExport').disabled = false;
+      document.getElementById('msg').className = 'ok';
+      document.getElementById('msg').innerHTML = res.count + ' baris — <a class="dl" target="_top" href="' + res.url + '">Download Excel</a>';
+    }).withFailureHandler(e => {
+      document.getElementById('btnExport').disabled = false;
+      msg(e.message, 'err');
+    }).exportXlsx(lastQuery);
+  }
+
+  function doImport() {
+    const f = document.getElementById('file').files[0];
+    if (!f) { msg('Pilih file dulu', 'err'); return; }
+    msg('Importing (bisa lama untuk file besar)...', '');
+    document.getElementById('btnImport').disabled = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      google.script.run.withSuccessHandler(res => {
+        document.getElementById('btnImport').disabled = false;
+        msg(res.imported + ' baris diimport', 'ok');
+      }).withFailureHandler(e => {
+        document.getElementById('btnImport').disabled = false;
+        msg(e.message, 'err');
+      }).importXlsx(reader.result.split(',')[1], f.name);
+    };
+    reader.readAsDataURL(f);
+  }
+</script>
+</body>
+</html>
