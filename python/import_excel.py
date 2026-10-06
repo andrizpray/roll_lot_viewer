@@ -262,11 +262,16 @@ def detect_type_from_headers(headers):
 def _import_sheet_rows(job_id, filepath, wb, ws, headers):
     """Import paper sheets using positional column mapping."""
     col_map_list = []
+    seen = set()
     for h in headers:
-        if h and str(h).strip() in SHEET_COLUMN_MAP:
-            col_map_list.append((h, SHEET_COLUMN_MAP[str(h).strip()]))
-        else:
-            col_map_list.append((h, None))
+        db_col = SHEET_COLUMN_MAP.get(str(h).strip()) if h and str(h).strip() in SHEET_COLUMN_MAP else None
+        # Duplicate DB column (e.g. cached VLOOKUP header labels) — keep first only
+        if db_col:
+            if db_col in seen:
+                db_col = None
+            else:
+                seen.add(db_col)
+        col_map_list.append((h, db_col))
 
     db_columns = [db_col for _, db_col in col_map_list if db_col]
 
