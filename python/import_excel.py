@@ -48,6 +48,9 @@ COLUMN_MAP = {
     "Dimension": None,
 }
 
+# Numeric DB columns — bad values are nulled instead of failing the whole batch
+NUMERIC_COLS = {"weight", "diameter"}
+
 # Columns that exist in roll_lot_histories table
 HISTORY_COLUMNS = [
     "lot_id", "item_id", "weight", "papertype", "gramature",
@@ -527,6 +530,13 @@ def import_roll_lots(job_id, filepath):
                 # Convert empty strings and dash placeholders to None
                 elif val == "" or val == "-":
                     val = None
+                # Numeric columns: coerce or null (bad cell like '1242/1250/275'
+                # must skip one row, not roll back the whole batch)
+                elif db_col in NUMERIC_COLS and val is not None:
+                    try:
+                        val = float(val)
+                    except (TypeError, ValueError):
+                        val = 0 if db_col == "weight" else None
                 # Cap numeric overflow (Excel cell corruption)
                 elif isinstance(val, (int, float)) and abs(val) >= 10**13:
                     val = None
